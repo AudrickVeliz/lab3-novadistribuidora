@@ -1,0 +1,35 @@
+# Archivos publicados por el equipo docente: no forman parte del repositorio.
+# Se descomprimen en la raíz del repositorio (ver README.md).
+/datos/
+/ejemplos/
+/politicas.md
+/catalogo_problemas.md
+
+# Enunciado del laboratorio: no forma parte del producto
+/Laboratorio_3_PD_26.pdf
+
+# Credenciales y configuración local
+.env
+
+# MLflow local (fuera de los contenedores)
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
