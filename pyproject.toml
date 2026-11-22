@@ -23,3 +23,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# Los archivos temporales de las pruebas quedan dentro del proyecto, no en el temporal del sistema.
+addopts = "--basetemp=.pytest_tmp"
