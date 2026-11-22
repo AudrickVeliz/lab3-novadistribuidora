@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novadistribuidora"
+version = "0.1.0"
+description = "Toma de pedidos por WhatsApp para NovaDistribuidora con modelos de lenguaje"
+requires-python = ">=3.12,<3.13"
+# Versiones exactas: local, CI y contenedores usan las mismas librerías.
+# Cada componente agrega las suyas en su PR.
+dependencies = [
+    "pandas==3.1.1",
+    "pyarrow==26.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
