@@ -29,5 +29,21 @@ catalogo_problemas.md
 conda create -n lab3 python=3.12
 conda activate lab3
 pip install -e ".[dev]"
-pytest -q
+git config core.hooksPath .githooks   # una vez: revisa los commits y protege main
+python tools/verificar.py             # lo mismo que corre CI
 ```
+
+`tools/verificar.py --sin-pruebas` corre solo las revisiones rápidas: formato, lint,
+workflows, finales de línea, rama y commits.
+
+## Integración continua
+
+Cada PR y cada cambio en `main` pasa por el workflow *Verificar* (`.github/workflows/verificar.yml`):
+
+| Trabajo | Qué revisa |
+|---|---|
+| `calidad` | Formato y lint con `ruff` (incluye reglas de seguridad), workflows con `actionlint`, finales de línea LF y vulnerabilidades de las dependencias con `pip-audit` |
+| `pytest` | Pruebas con cobertura de ramas; falla por debajo del mínimo de `pyproject.toml` |
+| `flujo` | Nombre de la rama y asuntos de los commits del PR |
+
+`main` exige los tres en verde. Además, GitHub analiza el código con CodeQL, bloquea los secretos al hacer push y Dependabot propone actualizaciones semanales.
