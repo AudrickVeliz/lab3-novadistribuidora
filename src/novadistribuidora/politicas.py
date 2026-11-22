@@ -5,16 +5,21 @@ cantidades de un pedido en construcción son un dict sku → unidades de venta c
 es el de aparición, que es el orden de las líneas en la respuesta (D-003).
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from datetime import date, datetime, time, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
-from novadistribuidora.datos import Producto, RegistroHistorial
+from novadistribuidora.datos import Cliente, Escala, Producto, RegistroHistorial
 from novadistribuidora.interpretacion import Mencion
-from novadistribuidora.pedido import Motivo, Pendiente, Sustitucion
+from novadistribuidora.pedido import Estado, Linea, Motivo, Pendiente, Sustitucion
 
 Cantidades = dict[str, int]
 
 UNIDADES_POR_DOCENA = 12
 ESTADO_ENTREGADO = "entregado"
+CENTAVOS = Decimal("0.01")
+HORA_CORTE = time(14, 0)
+DIAS_POR_SEMANA = 7
 
 
 def _skus_del_catalogo(skus: Iterable[str], catalogo: Iterable[str]) -> tuple[str, ...]:
@@ -122,3 +127,87 @@ def _sustituto_disponible(producto: Producto, productos: Mapping[str, Producto])
     if producto.sustituto_sku is None or not productos[producto.sustituto_sku].disponible:
         return None
     return producto.sustituto_sku
+
+
+def descuento_pct(cantidad: int, escalas: Sequence[Escala]) -> int:
+    """§5: el mayor porcentaje de la categoría cuyo mínimo alcanza la cantidad de la línea."""
+    return max(
+        (escala.descuento_pct for escala in escalas if cantidad >= escala.cantidad_minima),
+        default=0,
+    )
+
+
+def subtotal(cantidad: int, precio: Decimal, descuento: int) -> Decimal:
+    """§5: cantidad × precio × (1 − descuento/100), a 2 decimales con mitad hacia arriba."""
+    bruto = cantidad * precio * (1 - Decimal(descuento) / 100)
+    return bruto.quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
+
+def calcular_lineas(
+    cantidades: Cantidades,
+    productos: Mapping[str, Producto],
+    escalas: Mapping[str, Sequence[Escala]],
+) -> list[Linea]:
+    """§5: precio del catálogo y descuento por escala; nada viene del mensaje."""
+    lineas = []
+    for sku, cantidad in cantidades.items():
+        producto = productos[sku]
+        descuento = descuento_pct(cantidad, escalas.get(producto.categoria, ()))
+        lineas.append(
+            Linea(
+                sku=sku,
+                cantidad=cantidad,
+                precio_unitario=producto.precio,
+                descuento_pct=descuento,
+                subtotal=subtotal(cantidad, producto.precio, descuento),
+            )
+        )
+    return lineas
+
+
+def total(lineas: Iterable[Linea]) -> Decimal:
+    """§5: la suma de los subtotales ya redondeados."""
+    return sum((linea.subtotal for linea in lineas), Decimal("0.00"))
+
+
+def excede_credito(cliente: Cliente, total_pedido: Decimal) -> bool:
+    """§6: saldo pendiente + total por encima del límite manda el pedido a revisión."""
+    return cliente.saldo_pendiente + total_pedido > cliente.limite_credito
+
+
+def fecha_entrega(recibido: datetime, dias_visita: frozenset[int]) -> date:
+    """§7: primera visita de la ruta estrictamente posterior a la recepción.
+
+    Recibido a las 14:00 o después, cuenta como recibido al día siguiente. Sin feriados.
+    """
+    recepcion = recibido.date()
+    if recibido.time() >= HORA_CORTE:
+        recepcion += timedelta(days=1)
+    for dias in range(1, DIAS_POR_SEMANA + 1):
+        candidata = recepcion + timedelta(days=dias)
+        if candidata.weekday() in dias_visita:
+            return candidata
+    raise ValueError("El cliente no tiene días de visita: revisa dias_visita en clientes.parquet")
+
+
+def motivos_revision(pendientes: Iterable[Pendiente], credito_excedido: bool) -> list[Motivo]:
+    """§8: un motivo por tipo, en el orden en que aparecen; el crédito va al final (D-004)."""
+    motivos = list(dict.fromkeys(pendiente.motivo for pendiente in pendientes))
+    if credito_excedido:
+        motivos.append(Motivo.CREDITO_EXCEDIDO)
+    return motivos
+
+
+def estado_pedido(es_pedido: bool, lineas: Sequence[Linea], motivos: Sequence[Motivo]) -> Estado:
+    """§8: fuera de alcance si no hay pedido; revisión si hay algún motivo; si no, confirmado.
+
+    Un pedido que se queda sin líneas y sin motivos (p. ej., quitó todo) no tiene nada que
+    entregar ni revisar: se trata como fuera de alcance (D-004).
+    """
+    if not es_pedido:
+        return Estado.FUERA_DE_ALCANCE
+    if motivos:
+        return Estado.REQUIERE_REVISION
+    if lineas:
+        return Estado.CONFIRMADO
+    return Estado.FUERA_DE_ALCANCE
