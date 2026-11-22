@@ -17,7 +17,7 @@ class Mencion(BaseModel):
 
     texto: str = Field(
         min_length=1,
-        description="Fragmento del mensaje que nombra el producto, tal como lo escribió el cliente.",
+        description="Fragmento del mensaje que nombra el producto, como lo escribió el cliente.",
     )
     skus: list[str] = Field(
         description=(

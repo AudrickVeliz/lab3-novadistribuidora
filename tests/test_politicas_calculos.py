@@ -25,9 +25,7 @@ LUNES, JUEVES, SABADO, DOMINGO = 0, 3, 5, 6
 # §5 Precios y descuentos
 
 
-@pytest.mark.parametrize(
-    ("cantidad", "esperado"), [(9, 0), (10, 3), (19, 3), (20, 5), (48, 5)]
-)
+@pytest.mark.parametrize(("cantidad", "esperado"), [(9, 0), (10, 3), (19, 3), (20, 5), (48, 5)])
 def test_politica_descuento_mayor_escala_alcanzada(cantidad, esperado):
     assert descuento_pct(cantidad, BEBIDAS) == esperado
 
@@ -114,9 +112,7 @@ def test_politica_entrega_caso_d001():
 
 
 def test_politica_entrega_cruza_el_fin_de_semana():
-    assert fecha_entrega(datetime(2026, 11, 28, 20, 30), frozenset({DOMINGO})) == date(
-        2026, 12, 6
-    )
+    assert fecha_entrega(datetime(2026, 11, 28, 20, 30), frozenset({DOMINGO})) == date(2026, 12, 6)
 
 
 def test_politica_entrega_sin_dias_de_visita_falla_con_motivo():

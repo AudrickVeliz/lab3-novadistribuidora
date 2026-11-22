@@ -27,7 +27,11 @@ def _tablas_validas() -> dict[str, pd.DataFrame]:
             }
         ),
         "precios_escala": pd.DataFrame(
-            {"categoria": ["bebidas", "bebidas"], "cantidad_minima": [10, 20], "descuento_pct": [3, 5]}
+            {
+                "categoria": ["bebidas", "bebidas"],
+                "cantidad_minima": [10, 20],
+                "descuento_pct": [3, 5],
+            }
         ),
         "clientes": pd.DataFrame(
             {
@@ -79,7 +83,7 @@ def test_falla_si_falta_un_archivo(tmp_path):
     tablas = _tablas_validas()
     del tablas["clientes"]
 
-    with pytest.raises(DatosInvalidos, match="clientes.parquet"):
+    with pytest.raises(DatosInvalidos, match=r"clientes\.parquet"):
         cargar_datos(_escribir(tmp_path, tablas))
 
 

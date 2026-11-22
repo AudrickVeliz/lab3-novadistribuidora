@@ -151,7 +151,9 @@ def test_politica_cantidades_quitar_ambiguo_dentro_del_pedido_es_pendiente():
 
 
 def _registro(pedido_id, fecha, sku, cantidad, estado="entregado", cliente_id="C001"):
-    return RegistroHistorial(pedido_id, cliente_id, date.fromisoformat(fecha), sku, cantidad, estado)
+    return RegistroHistorial(
+        pedido_id, cliente_id, date.fromisoformat(fecha), sku, cantidad, estado
+    )
 
 
 def test_politica_lo_de_siempre_usa_el_ultimo_pedido_entregado():
