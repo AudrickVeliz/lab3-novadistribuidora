@@ -10,7 +10,7 @@ from typing import Protocol
 
 from novadistribuidora.confirmacion import redactar_confirmacion
 from novadistribuidora.contrato import RespuestaInterpretar, SolicitudInterpretar
-from novadistribuidora.datos import Cliente, Datos
+from novadistribuidora.datos import Datos
 from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.motor import armar_pedido
 
@@ -27,8 +27,11 @@ class InterpreteNoDisponible(Exception):
 
 
 class Interprete(Protocol):
-    def interpretar(self, mensajes: Sequence[str], cliente: Cliente) -> Interpretacion:
-        """Lanza InterpreteNoDisponible si no logra una interpretación válida."""
+    def interpretar(self, mensajes: Sequence[str]) -> Interpretacion:
+        """Lanza InterpreteNoDisponible si no logra una interpretación válida.
+
+        No recibe al cliente: "lo de siempre" lo expande el código con el historial (D-001).
+        """
         ...
 
 
@@ -46,7 +49,7 @@ class Servicio:
         cliente = self.datos.clientes.get(solicitud.cliente_id)
         if cliente is None:
             raise ClienteNoExiste(f"No existe el cliente {solicitud.cliente_id}")
-        interpretacion = self.interprete.interpretar(solicitud.mensajes, cliente)
+        interpretacion = self.interprete.interpretar(solicitud.mensajes)
         pedido = armar_pedido(interpretacion, cliente, solicitud.fecha_hora, self.datos)
         mensaje = redactar_confirmacion(pedido, self.datos.productos, solicitud.fecha_hora)
         return RespuestaInterpretar.desde_pedido(cliente.cliente_id, pedido, mensaje)

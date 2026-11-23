@@ -5,7 +5,8 @@ que convierte los mensajes informales de WhatsApp de los tenderos en pedidos est
 aplica las políticas de la empresa y envía a revisión humana lo que no puede resolver con certeza.
 
 > En construcción: las instrucciones para levantar el producto con `docker compose up` y
-> reproducir la evaluación se completan en los siguientes PR.
+> reproducir la evaluación se completan en los siguientes PR. Mientras tanto, el servicio se
+> levanta localmente (ver "Levantar el servicio").
 
 ## Archivos publicados
 
@@ -21,6 +22,35 @@ datos/historial_pedidos.parquet
 ejemplos/mensajes_dev.jsonl
 politicas.md
 catalogo_problemas.md
+```
+
+## Configuración
+
+Copie `.env.example` como `.env` y escriba su clave de OpenRouter en `OPENROUTER_API_KEY`. Es la
+única variable obligatoria; las demás tienen el valor de `.env.example`:
+
+| Variable | Para qué | Por omisión |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Clave de OpenRouter | (obligatoria) |
+| `MODELO` | Modelo que interpreta los mensajes | `anthropic/claude-haiku-5.5` |
+| `MODELO_ALTERNO` | Modelo que responde si el principal falla | `openai/gpt-6-luna` |
+| `TIEMPO_LIMITE_MODELO_S` | Segundos máximos por llamada al modelo | `10` |
+| `CARPETA_DATOS` | Carpeta de los parquet publicados | `datos` |
+
+`.env` no se sube a Git ni entra en las imágenes.
+
+## Levantar el servicio
+
+```bash
+uvicorn novadistribuidora.principal:crear_app_desde_entorno --factory --env-file .env --port 8000
+```
+
+La documentación interactiva queda en http://localhost:8000/docs. Ejemplo del Anexo:
+
+```bash
+curl -X POST http://localhost:8000/v1/pedidos/interpretar -H "content-type: application/json"   -d '{"cliente_id": "C001", "fecha_hora": "2026-11-23T15:20",
+       "mensajes": ["Buenas, mándeme 2 fardos de kola 600, una caja de aceite",
+                    "y 48 latas de energía max"]}'
 ```
 
 ## Desarrollo local

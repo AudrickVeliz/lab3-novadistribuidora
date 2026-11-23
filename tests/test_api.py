@@ -36,8 +36,8 @@ class InterpreteFalso:
         self.error = error
         self.llamadas = []
 
-    def interpretar(self, mensajes, cliente):
-        self.llamadas.append((list(mensajes), cliente.cliente_id))
+    def interpretar(self, mensajes):
+        self.llamadas.append(list(mensajes))
         if self.error is not None:
             raise self.error
         return self.interpretacion
@@ -106,13 +106,13 @@ def test_contrato_fuera_de_alcance_sin_lineas_total_cero_y_fecha_nula(datos):
     assert cuerpo["fecha_entrega"] is None
 
 
-def test_contrato_el_interprete_recibe_los_mensajes_y_el_cliente(datos):
+def test_contrato_el_interprete_recibe_los_mensajes(datos):
     interprete = InterpreteFalso()
     mensajes = ["Buenas", "le encargo 2 de kola 600"]
 
     _cliente_http(datos, interprete).post(RUTA, json=_solicitud(mensajes=mensajes))
 
-    assert interprete.llamadas == [(mensajes, "C001")]
+    assert interprete.llamadas == [mensajes]
 
 
 def test_contrato_ignora_los_campos_que_no_define(datos):
