@@ -96,11 +96,12 @@ def crear_cadena(principal: Runnable, alterno: Runnable, catalogo: str) -> Runna
 
 def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
     """Modelo de OpenRouter con salida estructurada; sin reintentos propios: los da la cadena."""
+    # Sin temperature: los modelos de razonamiento (Haiku 5.5, GPT-6 Luna) no la admiten, y con
+    # require_parameters OpenRouter no encontraría ningún proveedor (404).
     modelo = ChatOpenAI(
         model=nombre,
         base_url=OPENROUTER_URL,
         api_key=SecretStr(configuracion.openrouter_api_key),
-        temperature=0,
         timeout=configuracion.tiempo_limite_s,
         max_retries=0,
         # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
