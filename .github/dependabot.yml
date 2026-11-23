@@ -1,5 +1,4 @@
 # Actualizaciones semanales agrupadas; cada una llega como PR y pasa por Verificar (D-006).
-# Docker se agrega cuando exista la imagen (paso 5 de la hoja de ruta).
 version: 2
 updates:
   - package-ecosystem: pip
@@ -26,3 +25,20 @@ updates:
     groups:
       acciones:
         patterns: ["*"]
+
+  # Imágenes base de Containerfile y Containerfile.mlflow, y las de compose.yaml (D-011).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope

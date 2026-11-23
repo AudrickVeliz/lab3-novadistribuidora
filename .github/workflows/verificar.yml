@@ -82,3 +82,43 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python tools/flujo_git.py --rango "$BASE_SHA..$HEAD_SHA"
+
+  # El producto completo con Docker, como lo levanta el equipo docente (D-011). Sin secretos:
+  # datos mínimos generados aquí y una clave falsa, así que un pedido válido responde 503.
+  contenedores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Datos mínimos y .env con una clave falsa
+        run: |
+          pip install pandas==3.1.1 pyarrow==26.0.1
+          mkdir datos
+          python -c "import sys; from pathlib import Path; sys.path.insert(0, 'tests'); from datos_de_prueba import escribir_parquet, tablas_validas; escribir_parquet(Path('datos'), tablas_validas())"
+          printf 'OPENROUTER_API_KEY=clave-falsa-de-ci\n' > .env
+      - name: Construir las imágenes
+        run: docker compose build
+      - name: Vulnerabilidades de la imagen de la API
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: localhost/novadistribuidora:0.1.0
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Levantar el producto
+        run: docker compose up -d --wait
+      - name: Prueba de humo
+        run: python tools/prueba_de_humo.py --pedido 503
+      - name: Prueba de humo con MLflow detenido
+        run: |
+          docker compose stop mlflow
+          python tools/prueba_de_humo.py --pedido 503 --mlflow-detenido
+      - name: Registros de los contenedores
+        if: failure()
+        run: docker compose logs
