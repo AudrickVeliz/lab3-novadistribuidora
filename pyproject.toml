@@ -13,6 +13,8 @@ dependencies = [
     "fastapi==0.165.0",
     "langchain-core==1.8.4",
     "langchain-openai==1.8.5",
+    # Solo el cliente de trazas: el servidor de MLflow corre en su propio contenedor (D-010).
+    "mlflow-tracing==3.18.0",
     "pandas==3.1.1",
     "pyarrow==26.0.1",
     "pydantic==2.14.4",
@@ -25,6 +27,8 @@ dev = [
     "actionlint-py==1.7.12.25",
     "coverage==7.17.4",
     "httpx2==2.16.2",
+    # El servidor y el almacén SQLite de MLflow: pruebas de trazas y servidor local.
+    "mlflow==3.18.0",
     "pip-audit==2.10.1",
     "pytest==9.2.0",
     # uvicorn --env-file .env en local; en contenedores, compose entrega las variables.
@@ -40,6 +44,8 @@ testpaths = ["tests"]
 pythonpath = ["src", "tools"]
 # Los archivos temporales de las pruebas quedan dentro del proyecto, no en el temporal del sistema.
 addopts = "--basetemp=.pytest_tmp"
+# El almacén SQLite de MLflow usa una API de SQLAlchemy obsoleta; el proyecto no usa SQLAlchemy.
+filterwarnings = ["ignore::sqlalchemy.exc.SADeprecationWarning"]
 
 [tool.ruff]
 line-length = 100

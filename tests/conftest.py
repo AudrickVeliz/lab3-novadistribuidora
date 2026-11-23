@@ -1,9 +1,11 @@
 """Catálogo mínimo para las pruebas de políticas: los mismos SKU y valores que los datos publicados,
 para que cada caso se pueda contrastar con politicas.md sin depender de los archivos."""
 
+import os
 from datetime import date
 from decimal import Decimal
 
+import mlflow
 import pytest
 
 from novadistribuidora.datos import Cliente, Datos, Escala, Producto, RegistroHistorial
@@ -86,3 +88,16 @@ def datos(productos, escalas, cliente):
     )
     sinonimos = {"B01": ("kola 600", "coca 600"), "A06": ("aceite dorado",)}
     return Datos(productos, sinonimos, escalas, {cliente.cliente_id: cliente}, historial)
+
+
+@pytest.fixture(scope="session")
+def mlflow_de_prueba(tmp_path_factory):
+    """MLflow en un SQLite de la carpeta temporal: las pruebas nunca envían trazas a un servidor.
+
+    El envío es síncrono para leer cada traza apenas termina la solicitud.
+    """
+    os.environ["MLFLOW_ENABLE_ASYNC_TRACE_LOGGING"] = "false"
+    uri = f"sqlite:///{(tmp_path_factory.mktemp('mlflow') / 'mlflow.db').as_posix()}"
+    mlflow.set_tracking_uri(uri)
+    mlflow.set_experiment("pruebas")
+    return uri
