@@ -39,14 +39,18 @@ def main(carpeta: Path, escenario: str) -> None:
     mudo.bind(("127.0.0.1", 0))
     mudo.listen()
     uri = f"http://127.0.0.1:{mudo.getsockname()[1]}"
+    verificar_real = trazas.verificar_mlflow
     if escenario == "despues_del_experimento":
-        # Lo que deja mlflow.set_experiment cuando MLflow sí respondió al arrancar.
+        # MLflow respondió al arrancar: el experimento se crea y deja MLFLOW_EXPERIMENT_ID.
         os.environ["MLFLOW_EXPERIMENT_ID"] = "1"
         mlflow.set_experiment = lambda nombre: SimpleNamespace(experiment_id="1")
+        trazas.verificar_mlflow = lambda uri: None
     chequeo = trazas.activar_trazas(uri)
     if escenario == "despues_del_experimento":
         hilo = next(h for h in threading.enumerate() if h.name == "mlflow-experimento")
         hilo.join(timeout=5)
+        # Y después se cuelga.
+        trazas.verificar_mlflow = verificar_real
 
     datos = cargar_datos(escribir_parquet(carpeta, tablas_validas()))
     app = crear_app(Servicio(datos, InterpreteFijo(), {"mlflow": chequeo}))

@@ -267,11 +267,11 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Riesgo | Medida | Evidencia |
 |---|---|---|
 | El envío espera a MLflow | Envío asíncrono (`MLFLOW_ENABLE_ASYNC_TRACE_LOGGING`): la traza se encola y la mandan hilos aparte | Con MLflow detenido, los pedidos tardaron lo mismo (1.0 a 1.2 s, el tiempo del modelo) y un 404, 4 ms |
-| Arrancar con MLflow caído | El experimento se crea en un hilo que reintenta cada 5 s; el servicio arranca igual | `set_experiment` con MLflow caído falla tras los reintentos; en primer plano bloqueaba el arranque más de 170 s |
+| Arrancar con MLflow caído | Un hilo consulta `/health` de MLflow cada 2 s y solo entonces crea el experimento; el servicio arranca igual | `set_experiment` con MLflow caído tarda minutos en fallar por los reintentos del cliente: en primer plano bloqueaba el arranque más de 170 s, y en el hilo retrasaba el trazado hasta 2 minutos después de que MLflow volvía (lo detectó la prueba de humo en CI, D-011) |
 | Cada traza valida el experimento contra el servidor | Tras crearlo, el experimento queda como destino explícito (`mlflow.tracing.set_destination`) | Sin esto, `set_experiment` deja `MLFLOW_EXPERIMENT_ID` y, con MLflow colgado, **cada solicitud esperaba 10 s** |
 | Un MLflow colgado ocupa los hilos de envío | Tiempo límite de 5 s por petición (por omisión, 120 s) | `tests/mlflow_colgado.py`: peor latencia < 1 s con un servidor que nunca responde |
 | Se pierden las trazas del corte | 6 reintentos con espera creciente en los hilos de envío | Con 1 reintento, las 4 trazas de un corte de 30 s se perdieron; con 6, las 2 de un corte de 20 s llegaron completas al volver MLflow |
-| `/health` lento | Consulta `MLFLOW_TRACKING_URI/health` con 1 s de tiempo límite | Respondió `degradado` en 1.0 s, con código 200 |
+| `/health` lento o engañoso | Consulta `MLFLOW_TRACKING_URI/health` con 1 s de tiempo límite, y es `degradado` hasta que el experimento existe: que MLflow responda no basta para que las trazas se guarden | Respondió `degradado` en 1.0 s, con código 200 |
 
 **Alternativas:**
 
@@ -341,11 +341,12 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Desde cero (`up -d --wait`, con la descarga de PostgreSQL) | Los tres servicios sanos en **90 s**; construir las dos imágenes tomó unos 3 min |
 | `tools/prueba_de_humo.py --pedido 200` | `/health` ok, 422 en 0.01 s, 404, pedido real 200 en 1.96 s, trazas en MLflow con tokens y costo (US$0.00042 el pedido) |
 | `compose stop mlflow` | `degradado` con el motivo; 422 en 0.02 s; pedido real 200 en 1.40 s |
-| `compose start mlflow` | `/health = ok` en **6 s** |
+| `compose start mlflow` | `/health = ok` en **5.4 s** |
 | `compose down` y `up` sin `-v` | De nuevo sano en **26 s**; las 10 trazas se conservan |
-| Reiniciar la API con MLflow detenido | Arranca, `degradado`, atiende; al volver MLflow, las solicitudes nuevas se trazan |
+| Reiniciar la API con MLflow detenido | Arranca, `degradado`, atiende; al volver MLflow, `ok` en **7.0 s** y las solicitudes nuevas se trazan |
+| Desde cero con las imágenes ya construidas, y la prueba de humo de inmediato (lo que hace CI) | Sanos en **19 s**; las trazas llegan |
 
 **Límites aceptados:**
 
-- **Arranque de la API con MLflow caído:** las solicitudes que llegan antes de que aparezca MLflow no se trazan. El cliente liviano no puede crear la traza sin un experimento (`default_experiment_registry` no existe en `mlflow-tracing`), aunque el pedido se atiende igual. Cuando MLflow aparece, el hilo de D-010 crea el experimento y el trazado se reanuda.
+- **Arranque de la API con MLflow caído:** las solicitudes que llegan antes de que aparezca MLflow no se trazan. El cliente liviano no puede crear la traza sin un experimento (`default_experiment_registry` no existe en `mlflow-tracing`), aunque el pedido se atiende igual. Cuando MLflow aparece, el hilo de D-010 crea el experimento en unos 2 s, y mientras tanto `/health` dice `degradado`.
 - **Windows con Podman:** `localhost` puede tardar 21 s en clientes que prueban primero IPv6. Está documentado en el README; no afecta a Docker en Linux o macOS.

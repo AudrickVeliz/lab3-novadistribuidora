@@ -181,32 +181,71 @@ def test_trazas_verificar_mlflow_colgado_no_espera_mas_del_limite():
     assert time.perf_counter() - inicio < trazas.TIEMPO_LIMITE_SALUD_S + 1
 
 
-def test_trazas_el_experimento_se_reintenta_y_queda_como_destino(monkeypatch):
-    intentos, destinos = [], []
+def test_trazas_el_experimento_espera_a_mlflow_y_queda_como_destino(monkeypatch):
+    consultas, intentos, destinos = [], [], []
+
+    def verificar_mlflow(uri):
+        consultas.append(uri)
+        if len(consultas) < 3:
+            raise ConnectionError("MLflow arrancando")
 
     def set_experiment(nombre):
         intentos.append(nombre)
-        if len(intentos) < 3:
-            raise ConnectionError("MLflow arrancando")
         return SimpleNamespace(experiment_id="7")
 
+    monkeypatch.setattr(trazas, "verificar_mlflow", verificar_mlflow)
     monkeypatch.setattr(mlflow, "set_experiment", set_experiment)
     monkeypatch.setattr(mlflow.tracing, "set_destination", destinos.append)
+    listo = threading.Event()
 
-    trazas.crear_experimento(espera_s=0)
+    trazas.crear_experimento("http://mlflow:5000", listo, espera_s=0)
 
-    assert intentos == [trazas.EXPERIMENTO] * 3
+    # set_experiment solo se llama cuando MLflow ya responde: con MLflow caído tarda minutos.
+    assert consultas == ["http://mlflow:5000"] * 3
+    assert intentos == [trazas.EXPERIMENTO]
     assert [destino.experiment_id for destino in destinos] == ["7"]
+    assert listo.is_set()
+
+
+def test_trazas_un_fallo_al_crear_el_experimento_se_reintenta(monkeypatch):
+    intentos = []
+
+    def set_experiment(nombre):
+        intentos.append(nombre)
+        if len(intentos) < 2:
+            raise RuntimeError("MLflow todavía migrando su base")
+        return SimpleNamespace(experiment_id="7")
+
+    monkeypatch.setattr(trazas, "verificar_mlflow", lambda uri: None)
+    monkeypatch.setattr(mlflow, "set_experiment", set_experiment)
+    monkeypatch.setattr(mlflow.tracing, "set_destination", lambda destino: None)
+
+    trazas.crear_experimento("http://mlflow:5000", threading.Event(), espera_s=0)
+
+    assert len(intentos) == 2
+
+
+def test_trazas_health_degradado_hasta_que_el_experimento_esta_listo(monkeypatch):
+    monkeypatch.setattr(trazas, "verificar_mlflow", lambda uri: None)
+    listo = threading.Event()
+
+    with pytest.raises(ConnectionError, match="experimento de las trazas aún no está listo"):
+        trazas.verificar_trazado("http://mlflow:5000", listo)
+    listo.set()
+    trazas.verificar_trazado("http://mlflow:5000", listo)
 
 
 def test_trazas_activar_respeta_los_ajustes_del_entorno(monkeypatch, mlflow_de_prueba):
-    monkeypatch.setattr(trazas, "crear_experimento", lambda: None)
+    monkeypatch.setattr(trazas, "crear_experimento", lambda uri, listo: listo.set())
     monkeypatch.setenv("MLFLOW_HTTP_REQUEST_TIMEOUT", "9")
     monkeypatch.delenv("MLFLOW_HTTP_REQUEST_MAX_RETRIES", raising=False)
     llamadas = []
     monkeypatch.setattr(trazas, "verificar_mlflow", llamadas.append)
 
     chequeo = trazas.activar_trazas(mlflow_de_prueba)
+    for hilo in threading.enumerate():
+        if hilo.name == "mlflow-experimento":
+            hilo.join(timeout=5)
     chequeo()
     mlflow.langchain.autolog(disable=True)
 
