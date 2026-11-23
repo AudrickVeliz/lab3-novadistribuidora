@@ -25,7 +25,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 INTENTOS_DEL_PRINCIPAL = 2
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
-VERSION_INSTRUCCIONES = "v2"
+VERSION_INSTRUCCIONES = "v3"
 # 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
 CACHE = {"type": "ephemeral"}
 
@@ -43,8 +43,9 @@ todos los posibles y no elijas. Si la distribuidora no lo vende, una lista vací
 inventes un SKU.
 2. cantidad: el número que dice el cliente, aunque lo escriba en letras ("tres" es 3, "una \
 docena" es 1 con unidad docena). null si no dice cantidad.
-3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no dice la unidad; \
-"suelta" si habla de botellas, latas, bolsas, bolsitas, sobres, unidades, o libras de un \
+3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no nombra ninguna \
+unidad, aunque el producto vaya en plural ("tres detergentes espumoso" son 3 de venta); \
+"suelta" solo si nombra botellas, latas, bolsas, bolsitas, sobres, unidades, o libras de un \
 producto de 1 lb ("50 libras de frijol" son 50 sueltas); "docena" si habla de docenas \
 enteras. Media docena son 6 sueltas y docena y media son 18 sueltas: no las conviertas a \
 fardos ni cajas, ni redondees. Si las docenas son de fardos, cajas o displays ("media docena \

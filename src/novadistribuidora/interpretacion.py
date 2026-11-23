@@ -33,7 +33,8 @@ class Mencion(BaseModel):
     unidad: Unidad = Field(
         default="venta",
         description=(
-            "venta: fardo, caja, display o quintal, o sin unidad; "
+            "venta: fardo, caja, display o quintal, o sin unidad aunque el producto vaya en "
+            "plural; "
             "suelta: botellas, latas, bolsas, sobres, unidades o libras de un producto de 1 lb "
             "(media docena son 6 sueltas); docena: docenas enteras."
         ),
