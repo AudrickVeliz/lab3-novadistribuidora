@@ -33,6 +33,7 @@ COLUMNAS = {
         "disponible",
         "sustituto_sku",
     ),
+    "sinonimos": ("sku", "alias"),
     "precios_escala": ("categoria", "cantidad_minima", "descuento_pct"),
     "clientes": (
         "cliente_id",
@@ -93,15 +94,19 @@ class RegistroHistorial:
 @dataclass(frozen=True)
 class Datos:
     productos: dict[str, Producto]
+    # Alias conocidos por SKU; no es exhaustivo (politicas.md §1). Solo los usa el intérprete.
+    sinonimos: dict[str, tuple[str, ...]]
     escalas: dict[str, tuple[Escala, ...]]
     clientes: dict[str, Cliente]
     historial: tuple[RegistroHistorial, ...]
 
 
 def cargar_datos(carpeta: Path) -> Datos:
-    """Lee los cuatro parquet que usan las políticas. Lanza DatosInvalidos si algo no cuadra."""
+    """Lee los parquet publicados. Lanza DatosInvalidos si algo no cuadra."""
+    productos = _productos(_leer(carpeta, "productos"))
     return Datos(
-        productos=_productos(_leer(carpeta, "productos")),
+        productos=productos,
+        sinonimos=_sinonimos(_leer(carpeta, "sinonimos"), productos),
         escalas=_escalas(_leer(carpeta, "precios_escala")),
         clientes=_clientes(_leer(carpeta, "clientes")),
         historial=_historial(_leer(carpeta, "historial_pedidos")),
@@ -156,6 +161,18 @@ def _productos(tabla: pd.DataFrame) -> dict[str, Producto]:
                 f"{producto.sku}: el sustituto {producto.sustituto_sku} no está en el catálogo"
             )
     return productos
+
+
+def _sinonimos(tabla: pd.DataFrame, productos: dict[str, Producto]) -> dict[str, tuple[str, ...]]:
+    desconocidos = sorted(set(tabla["sku"]) - set(productos))
+    if desconocidos:
+        raise DatosInvalidos(
+            f"sinonimos.parquet nombra SKU que no están en el catálogo: {desconocidos}"
+        )
+    sinonimos: dict[str, list[str]] = {}
+    for fila in tabla.itertuples(index=False):
+        sinonimos.setdefault(fila.sku, []).append(fila.alias)
+    return {sku: tuple(alias) for sku, alias in sinonimos.items()}
 
 
 def _escalas(tabla: pd.DataFrame) -> dict[str, tuple[Escala, ...]]:

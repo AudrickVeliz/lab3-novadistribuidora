@@ -26,6 +26,12 @@ def _tablas_validas() -> dict[str, pd.DataFrame]:
                 "sustituto_sku": [None, "B02", None],
             }
         ),
+        "sinonimos": pd.DataFrame(
+            {
+                "sku": ["B01", "B01", "B02"],
+                "alias": ["kola 600", "coca 600", "kola de litro y medio"],
+            }
+        ),
         "precios_escala": pd.DataFrame(
             {
                 "categoria": ["bebidas", "bebidas"],
@@ -72,6 +78,7 @@ def test_carga_los_datos_con_sus_tipos(tmp_path):
     assert kola.sustituto_sku is None
     assert datos.productos["B03"].sustituto_sku == "B02"
     assert datos.productos["B03"].disponible is False
+    assert datos.sinonimos["B01"] == ("kola 600", "coca 600")
     assert [escala.descuento_pct for escala in datos.escalas["bebidas"]] == [3, 5]
     cliente = datos.clientes["C001"]
     assert cliente.dias_visita == {0, 3}
@@ -115,6 +122,14 @@ def test_falla_si_un_sku_se_repite(tmp_path):
 def test_falla_si_el_sustituto_no_esta_en_el_catalogo(tmp_path):
     tablas = _tablas_validas()
     tablas["productos"].loc[1, "sustituto_sku"] = "Z99"
+
+    with pytest.raises(DatosInvalidos, match="Z99"):
+        cargar_datos(_escribir(tmp_path, tablas))
+
+
+def test_falla_si_un_sinonimo_nombra_un_sku_inexistente(tmp_path):
+    tablas = _tablas_validas()
+    tablas["sinonimos"].loc[0, "sku"] = "Z99"
 
     with pytest.raises(DatosInvalidos, match="Z99"):
         cargar_datos(_escribir(tmp_path, tablas))

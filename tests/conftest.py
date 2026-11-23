@@ -84,4 +84,5 @@ def datos(productos, escalas, cliente):
         RegistroHistorial("PED-2", "C001", date(2026, 11, 19), "P04", 2, "entregado"),
         RegistroHistorial("PED-2", "C001", date(2026, 11, 19), "B04", 3, "entregado"),
     )
-    return Datos(productos, escalas, {cliente.cliente_id: cliente}, historial)
+    sinonimos = {"B01": ("kola 600", "coca 600"), "A06": ("aceite dorado",)}
+    return Datos(productos, sinonimos, escalas, {cliente.cliente_id: cliente}, historial)
