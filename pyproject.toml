@@ -10,6 +10,7 @@ requires-python = ">=3.12,<3.13"
 # Versiones exactas: local, CI y contenedores usan las mismas librerías.
 # Cada componente agrega las suyas en su PR.
 dependencies = [
+    "fastapi==0.165.0",
     "pandas==3.1.1",
     "pyarrow==26.0.1",
     "pydantic==2.14.4",
@@ -20,6 +21,7 @@ dependencies = [
 dev = [
     "actionlint-py==1.7.12.25",
     "coverage==7.17.4",
+    "httpx2==2.16.2",
     "pip-audit==2.10.1",
     "pytest==9.2.0",
     "ruff==0.17.6",
@@ -38,7 +40,7 @@ addopts = "--basetemp=.pytest_tmp"
 line-length = 100
 target-version = "py312"
 # Módulos propios para ordenar los imports, igual que pythonpath en pytest.
-src = ["src", "tools"]
+src = ["src", "tools", "tests"]
 
 [tool.ruff.lint]
 # Errores, imports, bugs probables, sintaxis moderna, seguridad (bandit), simplificaciones,
