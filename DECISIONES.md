@@ -247,3 +247,39 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 - **El caso que falla con ambos (D008):** "pasta" sin más debería ofrecer también la pasta dental, y los modelos solo listan las dos pastas alimenticias.
 - **Lo que no se ajustó:** el prompt no se forzó para ese caso. La evaluación usa mensajes no publicados, y ajustar las instrucciones a los 84 casos sería sobreajustarlas.
 - **Qué hizo subir el resultado de 81 a 83:** dos precisiones del prompt que corrigieron errores sistemáticos. "Sobre" puede ser parte del nombre del producto, y una mención ambigua no se une a otra más específica que venga después.
+
+## D-010: trazas en MLflow que nunca frenan ni tumban la API
+
+**Fecha:** 2026-11-22
+
+**Contexto:** el enunciado pide trazas de las solicitudes en MLflow, y que, si MLflow no está disponible, la API siga respondiendo y `GET /health` lo refleje. La evaluación interrumpe MLflow temporalmente y mide la latencia. Audrick decidió guardar el contenido completo y trazar todas las solicitudes, también las 422 y 404.
+
+**Decisión:**
+
+- **Qué se traza:**
+  - Una traza por solicitud a `/v1/`, abierta por un middleware: entrada, respuesta, código HTTP y etiquetas `http.status_code`, `estado` y `cliente_id`.
+  - Dentro, `mlflow.langchain.autolog()` registra la cadena: prompt, modelo, parser, tokens, el reintento y el modelo alterno.
+  - `/health` y `/docs` no se trazan.
+- **Contenido completo (decisión de Audrick):** mensajes, prompt e interpretación. MLflow es interno, y las trazas nunca llevan la clave de OpenRouter.
+- **Cliente liviano:** el servicio usa `mlflow-tracing`; el servidor completo solo está en el extra `dev` y en su contenedor.
+- **Cómo sobrevive a MLflow:**
+
+| Riesgo | Medida | Evidencia |
+|---|---|---|
+| El envío espera a MLflow | Envío asíncrono (`MLFLOW_ENABLE_ASYNC_TRACE_LOGGING`): la traza se encola y la mandan hilos aparte | Con MLflow detenido, los pedidos tardaron lo mismo (1.0 a 1.2 s, el tiempo del modelo) y un 404, 4 ms |
+| Arrancar con MLflow caído | El experimento se crea en un hilo que reintenta cada 5 s; el servicio arranca igual | `set_experiment` con MLflow caído falla tras los reintentos; en primer plano bloqueaba el arranque más de 170 s |
+| Cada traza valida el experimento contra el servidor | Tras crearlo, el experimento queda como destino explícito (`mlflow.tracing.set_destination`) | Sin esto, `set_experiment` deja `MLFLOW_EXPERIMENT_ID` y, con MLflow colgado, **cada solicitud esperaba 10 s** |
+| Un MLflow colgado ocupa los hilos de envío | Tiempo límite de 5 s por petición (por omisión, 120 s) | `tests/mlflow_colgado.py`: peor latencia < 1 s con un servidor que nunca responde |
+| Se pierden las trazas del corte | 6 reintentos con espera creciente en los hilos de envío | Con 1 reintento, las 4 trazas de un corte de 30 s se perdieron; con 6, las 2 de un corte de 20 s llegaron completas al volver MLflow |
+| `/health` lento | Consulta `MLFLOW_TRACKING_URI/health` con 1 s de tiempo límite | Respondió `degradado` en 1.0 s, con código 200 |
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Envío síncrono | La latencia del cliente dependería de MLflow; con MLflow colgado, cada pedido esperaría |
+| `mlflow` completo en la imagen de la API | Cientos de MB de dependencias (servidor, SQLAlchemy, Flask) que la API no usa |
+| Guardar las trazas en disco y reenviarlas | Más código y estado en el contenedor; los reintentos ya cubren cortes de unos 2 minutos |
+| Trazar solo las solicitudes que llegan al modelo | No queda evidencia de cómo se rechazaron las solicitudes inválidas de la evaluación |
+
+**Límite aceptado:** una traza que no logra enviarse tras los reintentos (un corte de más de unos 2 minutos, o más de 1,000 trazas en cola) se descarta con un aviso en el log. El pedido se atiende igual.

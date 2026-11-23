@@ -36,6 +36,7 @@ Copie `.env.example` como `.env` y escriba su clave de OpenRouter en `OPENROUTER
 | `MODELO_ALTERNO` | Modelo que responde si el principal falla | `openai/gpt-6-luna` |
 | `TIEMPO_LIMITE_MODELO_S` | Segundos máximos por llamada al modelo | `10` |
 | `CARPETA_DATOS` | Carpeta de los parquet publicados | `datos` |
+| `MLFLOW_TRACKING_URI` | Servidor de MLflow que recibe las trazas | `http://localhost:5000` |
 
 `.env` no se sube a Git ni entra en las imágenes.
 
@@ -52,6 +53,19 @@ curl -X POST http://localhost:8000/v1/pedidos/interpretar -H "content-type: appl
        "mensajes": ["Buenas, mándeme 2 fardos de kola 600, una caja de aceite",
                     "y 48 latas de energía max"]}'
 ```
+
+## Trazas en MLflow
+
+Cada solicitud a `/v1/` deja una traza en el experimento `toma-de-pedidos`, con la entrada, la
+respuesta, el código HTTP y, dentro, la llamada al modelo con sus tokens. Para verlas en local,
+levante MLflow antes que el servicio (los archivos quedan en el proyecto y Git los ignora):
+
+```bash
+mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts
+```
+
+y abra http://localhost:5000. Si MLflow no está disponible, el servicio atiende igual y
+`GET /health` responde `{"estado": "degradado", "motivo": "mlflow: no responde en ..."}` (D-010).
 
 ## Desarrollo local
 

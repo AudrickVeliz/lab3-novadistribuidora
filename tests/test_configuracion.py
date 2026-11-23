@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from novadistribuidora.configuracion import (
+    MLFLOW_POR_OMISION,
     MODELO_ALTERNO_POR_OMISION,
     MODELO_POR_OMISION,
     TIEMPO_LIMITE_POR_OMISION_S,
@@ -20,6 +21,7 @@ def test_con_solo_la_clave_usa_los_valores_de_env_example():
     assert configuracion.modelo_alterno == MODELO_ALTERNO_POR_OMISION
     assert configuracion.carpeta_datos == Path("datos")
     assert configuracion.tiempo_limite_s == TIEMPO_LIMITE_POR_OMISION_S
+    assert configuracion.mlflow_tracking_uri == MLFLOW_POR_OMISION
 
 
 def test_los_valores_por_omision_coinciden_con_env_example():
@@ -28,6 +30,7 @@ def test_los_valores_por_omision_coinciden_con_env_example():
     assert f"MODELO={MODELO_POR_OMISION}\n" in ejemplo
     assert f"MODELO_ALTERNO={MODELO_ALTERNO_POR_OMISION}\n" in ejemplo
     assert f"TIEMPO_LIMITE_MODELO_S={TIEMPO_LIMITE_POR_OMISION_S:g}\n" in ejemplo
+    assert f"MLFLOW_TRACKING_URI={MLFLOW_POR_OMISION}\n" in ejemplo
 
 
 def test_lee_cada_variable():
@@ -38,6 +41,7 @@ def test_lee_cada_variable():
             "MODELO_ALTERNO": "deepseek/deepseek-v4.1-flash",
             "CARPETA_DATOS": "/datos",
             "TIEMPO_LIMITE_MODELO_S": "7.5",
+            "MLFLOW_TRACKING_URI": "http://mlflow:5000",
         }
     )
 
@@ -45,6 +49,7 @@ def test_lee_cada_variable():
     assert configuracion.modelo_alterno == "deepseek/deepseek-v4.1-flash"
     assert configuracion.carpeta_datos == Path("/datos")
     assert configuracion.tiempo_limite_s == 7.5
+    assert configuracion.mlflow_tracking_uri == "http://mlflow:5000"
 
 
 def test_una_variable_vacia_cuenta_como_ausente():

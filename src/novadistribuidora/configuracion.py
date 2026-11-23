@@ -11,6 +11,8 @@ from pathlib import Path
 MODELO_POR_OMISION = "anthropic/claude-haiku-5.5"
 MODELO_ALTERNO_POR_OMISION = "openai/gpt-6-luna"
 CARPETA_DATOS_POR_OMISION = "datos"
+# En local; docker compose lo cambia por el nombre del servicio de MLflow.
+MLFLOW_POR_OMISION = "http://localhost:5000"
 # Haiku responde en 1 a 3 s; 10 s deja margen sin que un proveedor colgado frene el pedido.
 TIEMPO_LIMITE_POR_OMISION_S = 10.0
 
@@ -27,6 +29,7 @@ class Configuracion:
     modelo_alterno: str
     carpeta_datos: Path
     tiempo_limite_s: float
+    mlflow_tracking_uri: str
 
     @classmethod
     def desde_entorno(cls, entorno: Mapping[str, str]) -> "Configuracion":
@@ -41,6 +44,7 @@ class Configuracion:
             modelo_alterno=_valor(entorno, "MODELO_ALTERNO", MODELO_ALTERNO_POR_OMISION),
             carpeta_datos=Path(_valor(entorno, "CARPETA_DATOS", CARPETA_DATOS_POR_OMISION)),
             tiempo_limite_s=_segundos(_valor(entorno, "TIEMPO_LIMITE_MODELO_S", "")),
+            mlflow_tracking_uri=_valor(entorno, "MLFLOW_TRACKING_URI", MLFLOW_POR_OMISION),
         )
 
 

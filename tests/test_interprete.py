@@ -137,6 +137,7 @@ def test_crear_interprete_con_openrouter_no_llama_a_la_red(datos):
         modelo_alterno="openai/gpt-6-luna",
         carpeta_datos=Path("datos"),
         tiempo_limite_s=5,
+        mlflow_tracking_uri="http://localhost:5000",
     )
 
     interprete = crear_interprete(configuracion, datos)
