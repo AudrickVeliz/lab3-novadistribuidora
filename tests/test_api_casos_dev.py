@@ -24,7 +24,7 @@ class InterpreteIdeal:
             for caso in CASOS_DEV.values()
         }
 
-    def interpretar(self, mensajes, cliente):
+    def interpretar(self, mensajes):
         return self.por_mensajes[tuple(mensajes)]
 
 
