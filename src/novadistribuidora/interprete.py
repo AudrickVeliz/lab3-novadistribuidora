@@ -26,6 +26,8 @@ INTENTOS_DEL_PRINCIPAL = 2
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
 VERSION_INSTRUCCIONES = "v2"
+# 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
+CACHE = {"type": "ephemeral"}
 
 INSTRUCCIONES = f"""\
 Eres el asistente de toma de pedidos de NovaDistribuidora, una distribuidora mayorista de \
@@ -95,9 +97,12 @@ def formatear_mensajes(mensajes: Sequence[str]) -> str:
 
 def crear_cadena(principal: Runnable, alterno: Runnable, catalogo: str) -> Runnable:
     """prompt | principal (con un reintento) y, si falla, el alterno."""
-    prompt = ChatPromptTemplate.from_messages(
-        [SystemMessage(content=INSTRUCCIONES + catalogo), ("human", "{mensajes}")]
+    # Instrucciones y catálogo son iguales en cada pedido: la marca deja que Anthropic los lea
+    # de su caché a 0.1x del precio; OpenAI guarda su caché sin marca (D-014).
+    sistema = SystemMessage(
+        content=[{"type": "text", "text": INSTRUCCIONES + catalogo, "cache_control": CACHE}]
     )
+    prompt = ChatPromptTemplate.from_messages([sistema, ("human", "{mensajes}")])
     con_reintento = principal.with_retry(
         stop_after_attempt=INTENTOS_DEL_PRINCIPAL, wait_exponential_jitter=False
     )
