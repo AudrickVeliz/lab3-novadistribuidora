@@ -21,8 +21,6 @@ from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.servicio import InterpreteNoDisponible
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
-# Un reintento cubre un error transitorio; más intentos solo alargan la espera del tendero.
-INTENTOS_DEL_PRINCIPAL = 2
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
 VERSION_INSTRUCCIONES = "v3"
@@ -97,17 +95,16 @@ def formatear_mensajes(mensajes: Sequence[str]) -> str:
 
 
 def crear_cadena(principal: Runnable, alterno: Runnable, catalogo: str) -> Runnable:
-    """prompt | principal (con un reintento) y, si falla, el alterno."""
+    """prompt | principal y, si falla, el alterno."""
     # Instrucciones y catálogo son iguales en cada pedido: la marca deja que Anthropic los lea
     # de su caché a 0.1x del precio; OpenAI guarda su caché sin marca (D-014).
     sistema = SystemMessage(
         content=[{"type": "text", "text": INSTRUCCIONES + catalogo, "cache_control": CACHE}]
     )
     prompt = ChatPromptTemplate.from_messages([sistema, ("human", "{mensajes}")])
-    con_reintento = principal.with_retry(
-        stop_after_attempt=INTENTOS_DEL_PRINCIPAL, wait_exponential_jitter=False
-    )
-    return prompt | con_reintento.with_fallbacks([alterno])
+    # Sin reintento del principal: tras un corte de 10 s o un 429, el alterno responde en ~2 s
+    # y otro intento podría sumar otros 10 s (D-014).
+    return prompt | principal.with_fallbacks([alterno])
 
 
 def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:

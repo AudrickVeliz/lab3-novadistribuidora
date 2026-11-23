@@ -20,7 +20,7 @@ class ClienteNoExiste(Exception):
 
 
 class InterpreteNoDisponible(Exception):
-    """El modelo no pudo interpretar el mensaje, ni con reintento ni con el modelo alterno.
+    """El modelo no pudo interpretar el mensaje, ni con el principal ni con el alterno.
 
     La API responde 503: nunca se inventa un pedido (D-008).
     """
