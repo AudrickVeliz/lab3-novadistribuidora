@@ -17,10 +17,11 @@ Lo principal no es llamar al modelo, sino hacerlo confiable: no inventar product
 
 ## Flujo de Git
 
-- `main` está protegida: todo cambio entra por Pull Request con las pruebas en verde. Audrick revisa cada PR y aprueba el merge.
-- Ramas con prefijo y descripción corta: `feat/`, `fix/`, `chore/`, `docs/`, `test/`.
-- Commits pequeños y de un solo propósito, en español, con el formato `tipo: descripción` (`feat: calcular el descuento por escala`).
-- Cada PR cubre un solo tema y explica qué cambia y cómo se verificó.
+- `main` está protegida: todo cambio entra por Pull Request con los checks `calidad`, `pytest` y `flujo` de *Verificar* en verde. Audrick revisa cada PR y aprueba el merge, que se hace con *merge commit* y borrando la rama.
+- Ramas `tipo/descripcion-corta`, con tipo `feat`, `fix`, `chore`, `docs`, `test`, `ci` o `refactor`.
+- Commits pequeños y de un solo propósito, en español, con el formato `tipo: descripción` (`feat: calcular el descuento por escala`): hasta 72 caracteres, sin punto final y sin `fixup!` ni `WIP`.
+- `tools/flujo_git.py` revisa ramas, commits y finales de línea en CI y en los hooks de `.githooks/` (se activan una vez con `git config core.hooksPath .githooks`). Nunca se usa `--no-verify`.
+- Cada PR cubre un solo tema y llena la plantilla: qué cambia, el requerimiento que cubre y cómo se verificó.
 - La entrega se identifica con el tag `entrega-lab3`.
 
 ## Datos
@@ -74,11 +75,19 @@ Lo principal no es llamar al modelo, sino hacerlo confiable: no inventar product
 - Cada política, regla o criterio tiene al menos una prueba que lo nombra (`test_politica_cantidades_...`).
 - Las pruebas no llaman al modelo ni dependen de servidores en ejecución (MLflow); usan un intérprete falso. Las que usan los datos publicados se saltan si no están.
 - Una prueba que falla no se ajusta hasta entender por qué falló: puede ser el código o la prueba.
+- La cobertura de ramas no baja del mínimo de `pyproject.toml`. Una línea que no se puede probar se justifica, no se excluye en silencio.
+
+## Calidad y seguridad
+
+- `ruff` define el formato y el lint (incluidas las reglas de seguridad de bandit y una complejidad máxima de 8). Un `noqa` siempre dice por qué.
+- `python tools/verificar.py` corre lo mismo que CI: formato, lint, `actionlint`, finales de línea, rama y commits, pruebas con cobertura y `pip-audit`. Con `--sin-pruebas`, solo las revisiones rápidas.
+- Las acciones de GitHub se fijan a un SHA de commit con la versión en un comentario. Los workflows tienen permisos de solo lectura y tiempo límite, y los valores del evento llegan por `env`, nunca interpolados en el script.
+- Dependabot propone las actualizaciones; cada una pasa por *Verificar* como cualquier PR.
 
 ## Cómo trabajar en este proyecto
 
 - Avanza paso a paso y consulta con Audrick cómo hacer cada paso antes de implementarlo.
-- Antes de abrir un PR, revisa el diff contra estas reglas y contra el enunciado, corre pytest y reporta el resultado en el PR.
+- Antes de abrir un PR, revisa el diff contra estas reglas y contra el enunciado, corre `python tools/verificar.py` y reporta el resultado en el PR.
 - No se instalan skills, plugins ni herramientas de agentes de terceros: las buenas prácticas se escriben aquí.
 - Explica el porqué de cada decisión: Audrick debe poder comprender y justificar todo el código.
 - No declares algo terminado sin haberlo ejecutado; reporta el comando y el resultado.

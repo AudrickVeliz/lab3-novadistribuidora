@@ -16,13 +16,49 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest==9.2.0"]
+# Las mismas herramientas en local (tools/verificar.py) y en CI (D-006).
+dev = [
+    "actionlint-py==1.7.12.25",
+    "coverage==7.17.4",
+    "pip-audit==2.10.1",
+    "pytest==9.2.0",
+    "ruff==0.17.6",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tools"]
 # Los archivos temporales de las pruebas quedan dentro del proyecto, no en el temporal del sistema.
 addopts = "--basetemp=.pytest_tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Módulos propios para ordenar los imports, igual que pythonpath en pytest.
+src = ["src", "tools"]
+
+[tool.ruff.lint]
+# Errores, imports, bugs probables, sintaxis moderna, seguridad (bandit), simplificaciones,
+# complejidad, nombres y buenas prácticas de pytest.
+select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "C90", "N", "PT", "RUF"]
+# RUF001-003 marcan como ambiguos × y −, que el dominio usa en textos y fórmulas en español.
+# N818 pide el sufijo inglés "Error"; las excepciones llevan nombres del dominio (DatosInvalidos).
+ignore = ["RUF001", "RUF002", "RUF003", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.coverage.run]
+source = ["novadistribuidora"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

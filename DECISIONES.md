@@ -111,3 +111,34 @@ Si algo falla, lanza `DatosInvalidos` con un mensaje que dice qué revisar. Los 
 | No validar | Un sustituto inexistente o un día mal escrito darían pedidos incorrectos sin aviso |
 
 **Justificación:** fallar al arrancar con un mensaje claro es más fácil de diagnosticar que un pedido mal calculado.
+
+## D-006: integración continua de un producto completo
+
+**Fecha:** 2026-11-22
+
+**Contexto:** el equipo docente evaluará el tag de entrega sin intervención manual, con sus propios mensajes y solicitudes inválidas. Un error que llega a `main` llega a la evaluación. Audrick pidió aplicar todo lo de CI/CD que tenga sentido para un producto completo, tomando como referencia las prácticas de otro proyecto suyo.
+
+**Decisión:**
+
+| Capa | Qué se aplica |
+|---|---|
+| Código | `ruff` para formato y lint, con reglas de bugs probables, seguridad (bandit), complejidad máxima 8 y buenas prácticas de pytest |
+| Pruebas | Cobertura de ramas con un mínimo de 90 % (hoy, 100 %) |
+| Dependencias | Versiones exactas en `pyproject.toml`, `pip-audit` en cada PR y Dependabot semanal para pip y GitHub Actions |
+| Workflows | Acciones fijadas a un SHA de commit, `permissions: contents: read`, checkout sin credenciales persistidas, tiempo límite, cancelación de corridas viejas y `actionlint`; los valores del evento entran por `env` |
+| Flujo de Git | `tools/flujo_git.py` revisa ramas, commits y finales de línea en CI y en los hooks locales `commit-msg` y `pre-commit` |
+| Repositorio | `main` exige `calidad`, `pytest` y `flujo`; CodeQL, escaneo de secretos con bloqueo al hacer push, alertas y actualizaciones de seguridad de Dependabot; plantilla de PR y CODEOWNERS |
+| Local | `tools/verificar.py` corre lo mismo que CI, para no depender de CI para enterarse de un error |
+
+Lo que depende de piezas que todavía no existen se agrega con ellas: construir y escanear la imagen, y levantar `docker compose` con una prueba de humo en CI, en el paso 5; publicar las imágenes al crear el tag `entrega-lab3`, en el paso 7.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Solo `pytest` (como hasta el paso 1a) | Formato, seguridad, dependencias vulnerables y workflows mal escritos llegan a `main` sin aviso |
+| `pre-commit` (el framework) | Descarga sus herramientas en una caché fuera del proyecto y agrega otra configuración; los hooks de `.githooks` y `tools/verificar.py` usan las mismas versiones que `pyproject.toml` |
+| `flake8`, `black`, `isort` y `bandit` por separado | Cuatro herramientas y configuraciones para lo que `ruff` hace en una sola, mucho más rápido |
+| Acciones por etiqueta (`@v7`) | La etiqueta se puede mover a otro código; el SHA no |
+
+**Justificación:** cada capa detecta una clase de error distinta antes de llegar a `main`, y todo corre igual en local que en CI. Como el repositorio es público, CodeQL, el escaneo de secretos y Dependabot no tienen costo.

@@ -1,4 +1,4 @@
-"""Las piezas del pedido que propone el servicio, con los nombres y valores del contrato del Anexo."""
+"""Las piezas del pedido que propone el servicio, con los nombres y valores del Anexo."""
 
 from dataclasses import dataclass
 from decimal import Decimal

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Asunto con formato 'tipo: descripción' (CLAUDE.md, "Flujo de Git"). Se activa con
+# git config core.hooksPath .githooks
+exec python "$(git rev-parse --show-toplevel)/tools/flujo_git.py" --mensaje "$1"
