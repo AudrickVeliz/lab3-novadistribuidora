@@ -23,7 +23,8 @@ from mlflow.entities.trace_location import MlflowExperimentLocation
 EXPERIMENTO = "toma-de-pedidos"
 RUTAS_TRAZADAS = "/v1/"
 TIEMPO_LIMITE_SALUD_S = 1.0
-ESPERA_ENTRE_INTENTOS_S = 5.0
+# Cada cuánto se busca MLflow mientras no responde: el trazado se reanuda a lo sumo en este lapso.
+ESPERA_ENTRE_INTENTOS_S = 2.0
 # Por omisión, cada petición espera hasta 120 s a un MLflow colgado; 5 s acotan cuánto queda
 # ocupado un hilo de envío. Los reintentos, con espera creciente, corren en esos hilos y no en
 # la solicitud: con 6, las trazas de un corte de hasta unos 2 minutos llegan cuando MLflow
@@ -43,14 +44,24 @@ def activar_trazas(tracking_uri: str) -> Callable[[], None]:
         os.environ.setdefault(variable, valor)
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.langchain.autolog()
-    threading.Thread(target=crear_experimento, name="mlflow-experimento", daemon=True).start()
-    return lambda: verificar_mlflow(tracking_uri)
+    listo = threading.Event()
+    threading.Thread(
+        target=crear_experimento, args=(tracking_uri, listo), name="mlflow-experimento", daemon=True
+    ).start()
+    return lambda: verificar_trazado(tracking_uri, listo)
 
 
-def crear_experimento(espera_s: float = ESPERA_ENTRE_INTENTOS_S) -> None:
-    """Reintenta hasta que MLflow responda; mientras tanto las trazas no se pueden enviar."""
+def crear_experimento(
+    tracking_uri: str, listo: threading.Event, espera_s: float = ESPERA_ENTRE_INTENTOS_S
+) -> None:
+    """Espera a que MLflow responda y crea el experimento; hasta entonces no hay trazas.
+
+    Primero consulta /health (1 s): set_experiment con MLflow caído tarda minutos en fallar por
+    los reintentos del cliente, y el trazado no se reanudaría al volver MLflow.
+    """
     while True:
         try:
+            verificar_mlflow(tracking_uri)
             experimento = mlflow.set_experiment(EXPERIMENTO)
         except Exception as error:  # MLflow caído o arrancando: se reintenta, nunca se rinde
             registro.warning("MLflow no disponible para crear el experimento: %s", error)
@@ -60,7 +71,15 @@ def crear_experimento(espera_s: float = ESPERA_ENTRE_INTENTOS_S) -> None:
             # servidor; esa consulta es síncrona y con MLflow colgado frenaba 10 s cada solicitud.
             ubicacion = MlflowExperimentLocation(experiment_id=experimento.experiment_id)
             mlflow.tracing.set_destination(ubicacion)
+            listo.set()
             return
+
+
+def verificar_trazado(tracking_uri: str, listo: threading.Event) -> None:
+    """MLflow responde y el experimento existe: solo entonces las solicitudes quedan trazadas."""
+    verificar_mlflow(tracking_uri)
+    if not listo.is_set():
+        raise ConnectionError("responde, pero el experimento de las trazas aún no está listo")
 
 
 def verificar_mlflow(tracking_uri: str) -> None:

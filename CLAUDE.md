@@ -17,7 +17,7 @@ Lo principal no es llamar al modelo, sino hacerlo confiable: no inventar product
 
 ## Flujo de Git
 
-- `main` está protegida: todo cambio entra por Pull Request con los checks `calidad`, `pytest` y `flujo` de *Verificar* en verde. Audrick revisa cada PR y aprueba el merge, que se hace con *merge commit* y borrando la rama.
+- `main` está protegida: todo cambio entra por Pull Request con los checks `calidad`, `pytest`, `flujo` y `contenedores` de *Verificar* en verde. Audrick revisa cada PR y aprueba el merge, que se hace con *merge commit* y borrando la rama.
 - Ramas `tipo/descripcion-corta`, con tipo `feat`, `fix`, `chore`, `docs`, `test`, `ci` o `refactor`.
 - Commits pequeños y de un solo propósito, en español, con el formato `tipo: descripción` (`feat: calcular el descuento por escala`): hasta 72 caracteres, sin punto final y sin `fixup!` ni `WIP`.
 - `tools/flujo_git.py` revisa ramas, commits y finales de línea en CI y en los hooks de `.githooks/` (se activan una vez con `git config core.hooksPath .githooks`). Nunca se usa `--no-verify`.
@@ -35,6 +35,8 @@ Lo principal no es llamar al modelo, sino hacerlo confiable: no inventar product
 - Python 3.12 en el entorno de Conda `lab3`. Dependencias con versiones exactas en `pyproject.toml`.
 - Los modelos se consumen por OpenRouter; el modelo y la clave se configuran en `.env`.
 - La API y MLflow se levantan con `docker compose up`. Localmente se ejecuta sobre Podman en modo rootless, pero el compose debe funcionar sin cambios en Docker, que es lo que usará el equipo docente.
+- Nombres de Podman: `compose.yaml`, `Containerfile`, `Containerfile.<servicio>` y `.containerignore`. Docker solo lee `.dockerignore`: es una copia idéntica y `tests/test_contenedores.py` lo verifica. El compose indica `dockerfile:` y usa nombres de imagen completos (`docker.io/library/...`, `localhost/...`).
+- Lo que Podman descarta del formato OCI (como `HEALTHCHECK`) se declara en `compose.yaml`.
 - Imágenes con versiones fijas.
 - Todo el texto se guarda con finales de línea LF.
 

@@ -1,5 +1,7 @@
 """Arranque del servicio desde el entorno, como lo hace uvicorn, sin llamar al modelo."""
 
+import threading
+
 import mlflow
 import pytest
 from fastapi.testclient import TestClient
@@ -23,16 +25,30 @@ def entorno_completo(tmp_path, monkeypatch, mlflow_de_prueba):
     mlflow.langchain.autolog(disable=True)
 
 
+def _esperar_experimento():
+    """El hilo que crea el experimento en el MLflow de prueba, si todavía no terminó."""
+    for hilo in threading.enumerate():
+        if hilo.name == "mlflow-experimento":
+            hilo.join(timeout=30)
+
+
 def test_arranca_con_la_clave_y_los_datos(entorno_completo):
-    respuesta = TestClient(crear_app_desde_entorno()).get("/health")
+    app = crear_app_desde_entorno()
+    _esperar_experimento()
+
+    respuesta = TestClient(app).get("/health")
 
     assert respuesta.json() == {"estado": "ok"}
 
 
 def test_health_consulta_el_mlflow_configurado(entorno_completo, mlflow_de_prueba):
-    TestClient(crear_app_desde_entorno()).get("/health")
+    app = crear_app_desde_entorno()
+    _esperar_experimento()
 
-    assert entorno_completo == [mlflow_de_prueba]
+    TestClient(app).get("/health")
+
+    assert entorno_completo
+    assert set(entorno_completo) == {mlflow_de_prueba}
 
 
 def test_las_solicitudes_quedan_trazadas(entorno_completo):

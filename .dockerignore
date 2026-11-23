@@ -1,0 +1,8 @@
+# Solo pyproject.toml y src/ entran al contexto de construcción: ni datos, ni .env, ni el
+# historial (D-011). Podman lee este archivo; Docker solo lee .dockerignore, que es una copia
+# idéntica verificada por tests/test_contenedores.py.
+*
+!pyproject.toml
+!src/
+src/**/__pycache__
+src/**/*.egg-info

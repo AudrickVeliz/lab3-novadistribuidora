@@ -1,0 +1,5 @@
+# Servidor de MLflow (D-011): la imagen oficial, de la misma versión que el cliente de la API,
+# más el conector de PostgreSQL (psycopg 3, el dialecto que usa MLflow 3).
+FROM ghcr.io/mlflow/mlflow:v3.18.0
+
+RUN pip install --no-cache-dir "psycopg[binary]==3.3.9"

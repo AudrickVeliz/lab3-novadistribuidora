@@ -267,11 +267,11 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Riesgo | Medida | Evidencia |
 |---|---|---|
 | El envío espera a MLflow | Envío asíncrono (`MLFLOW_ENABLE_ASYNC_TRACE_LOGGING`): la traza se encola y la mandan hilos aparte | Con MLflow detenido, los pedidos tardaron lo mismo (1.0 a 1.2 s, el tiempo del modelo) y un 404, 4 ms |
-| Arrancar con MLflow caído | El experimento se crea en un hilo que reintenta cada 5 s; el servicio arranca igual | `set_experiment` con MLflow caído falla tras los reintentos; en primer plano bloqueaba el arranque más de 170 s |
+| Arrancar con MLflow caído | Un hilo consulta `/health` de MLflow cada 2 s y solo entonces crea el experimento; el servicio arranca igual | `set_experiment` con MLflow caído tarda minutos en fallar por los reintentos del cliente: en primer plano bloqueaba el arranque más de 170 s, y en el hilo retrasaba el trazado hasta 2 minutos después de que MLflow volvía (lo detectó la prueba de humo en CI, D-011) |
 | Cada traza valida el experimento contra el servidor | Tras crearlo, el experimento queda como destino explícito (`mlflow.tracing.set_destination`) | Sin esto, `set_experiment` deja `MLFLOW_EXPERIMENT_ID` y, con MLflow colgado, **cada solicitud esperaba 10 s** |
 | Un MLflow colgado ocupa los hilos de envío | Tiempo límite de 5 s por petición (por omisión, 120 s) | `tests/mlflow_colgado.py`: peor latencia < 1 s con un servidor que nunca responde |
 | Se pierden las trazas del corte | 6 reintentos con espera creciente en los hilos de envío | Con 1 reintento, las 4 trazas de un corte de 30 s se perdieron; con 6, las 2 de un corte de 20 s llegaron completas al volver MLflow |
-| `/health` lento | Consulta `MLFLOW_TRACKING_URI/health` con 1 s de tiempo límite | Respondió `degradado` en 1.0 s, con código 200 |
+| `/health` lento o engañoso | Consulta `MLFLOW_TRACKING_URI/health` con 1 s de tiempo límite, y es `degradado` hasta que el experimento existe: que MLflow responda no basta para que las trazas se guarden | Respondió `degradado` en 1.0 s, con código 200 |
 
 **Alternativas:**
 
@@ -283,3 +283,70 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Trazar solo las solicitudes que llegan al modelo | No queda evidencia de cómo se rechazaron las solicitudes inválidas de la evaluación |
 
 **Límite aceptado:** una traza que no logra enviarse tras los reintentos (un corte de más de unos 2 minutos, o más de 1,000 trazas en cola) se descarta con un aviso en el log. El pedido se atiende igual.
+
+## D-011: contenedores con nombres de Podman que funcionan igual en Docker
+
+**Fecha:** 2026-11-22
+
+**Contexto:** el enunciado pide levantar la API y MLflow con `docker compose up` siguiendo el README, sin datos ni credenciales en las imágenes o el repositorio, y con un `.env.example`. El equipo docente usará Docker; Audrick trabaja con Podman rootless y pidió los nombres habituales de Podman. Audrick eligió PostgreSQL como almacén de MLflow.
+
+**Decisión:**
+
+| Servicio | Imagen | Puerto en la máquina | Papel |
+|---|---|---|---|
+| `api` | `localhost/novadistribuidora:0.1.0` (`Containerfile`) | `8000` | El servicio del Anexo |
+| `mlflow` | `localhost/novadistribuidora-mlflow:3.18.0` (`Containerfile.mlflow`: oficial `v3.18.0` + `psycopg 3.3.9`) | `127.0.0.1:5000` | Trazas; artefactos servidos por HTTP |
+| `bd-mlflow` | `postgres:17.12` | ninguno | Almacén de MLflow |
+
+- **Nombres de Podman:** `compose.yaml`, `Containerfile` y `.containerignore`.
+  - Docker solo detecta `Dockerfile`, así que el compose indica `dockerfile:`.
+  - Docker solo lee `.dockerignore`, que es una **copia idéntica** de `.containerignore`, verificada por `tests/test_contenedores.py`. Si faltara, Docker metería `.env` y los datos en el contexto de construcción.
+- **Imagen de la API:**
+  - `python:3.12.16-slim-bookworm`, el mismo Python del entorno de desarrollo;
+  - solo el paquete, sin el extra `dev`;
+  - usuario sin privilegios (uid 1000);
+  - del contexto solo entran `pyproject.toml` y `src/`.
+- **Credenciales:** la API recibe `.env` con `env_file`; si falta, compose se detiene y lo dice. El compose fija `CARPETA_DATOS=/datos` y `MLFLOW_TRACKING_URI=http://mlflow:5000`.
+- **Base de MLflow sin contraseña:**
+  - usa `trust`, pero solo es alcanzable desde la red `interna-mlflow` (`internal: true`): sin puertos, sin salida a internet, y la API no está en ella;
+  - así no hay ninguna clave en el repositorio, y un `.env` con solo `OPENROUTER_API_KEY` levanta todo.
+- **Puertos:**
+  - la API, en todas las interfaces, porque es el servicio del contrato;
+  - MLflow, solo en `127.0.0.1`, porque no tiene autenticación;
+  - MLflow 3 rechaza los `Host` desconocidos, así que se permiten `mlflow:5000` y los de la máquina, sin desactivar la protección.
+- **Arranque:** la API **no** depende de MLflow (D-010); MLflow espera a que su base esté sana. Cada servicio tiene healthcheck y `restart: unless-stopped`.
+- **`HEALTHCHECK` en el compose:** el de la API se declara en `compose.yaml` y no en el `Containerfile`, porque Podman construye en formato OCI y lo descarta (verificado con `podman inspect`).
+- **Volúmenes con nombre** para la base y los artefactos: sobreviven a `compose down`, funcionan igual en Podman y Docker, y OneDrive no sincroniza la base.
+- **CI** (trabajo `contenedores`, lo pendiente de D-006):
+  - construye con Docker;
+  - escanea la imagen de la API con Trivy: falla con vulnerabilidades críticas o altas que tengan corrección;
+  - levanta el producto con datos mínimos y una clave falsa, con la que un pedido válido da 503;
+  - corre `tools/prueba_de_humo.py` con MLflow arriba y detenido.
+  - Dependabot actualiza también las imágenes.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| SQLite en un volumen para MLflow | Un contenedor menos, pero bloquea la base en cada escritura: con trazas desde 10 hilos y muchas solicitudes seguidas, aparecen errores `database is locked` |
+| Contraseña de PostgreSQL en `.env` | Obliga al equipo docente a definir una variable más; con `trust` en una red interna no hay nada que proteger desde fuera |
+| `Dockerfile` y `.dockerignore` solamente | Funciona en ambos, pero Audrick pidió los nombres de Podman |
+| Solo `.containerignore` | Docker lo ignora: el contexto incluiría `.env` con la clave |
+| Publicar la API solo en IPv4 (`0.0.0.0:8000`) para evitar la espera en `::1` | Se probó y no cambia nada: en Windows el que responde en `::1` es el relé de WSL, no el contenedor |
+
+**Verificación** con Podman 6.1.4 rootless y Docker Compose v5.6.1, con la clave real:
+
+| Prueba | Resultado |
+|---|---|
+| Desde cero (`up -d --wait`, con la descarga de PostgreSQL) | Los tres servicios sanos en **90 s**; construir las dos imágenes tomó unos 3 min |
+| `tools/prueba_de_humo.py --pedido 200` | `/health` ok, 422 en 0.01 s, 404, pedido real 200 en 1.96 s, trazas en MLflow con tokens y costo (US$0.00042 el pedido) |
+| `compose stop mlflow` | `degradado` con el motivo; 422 en 0.02 s; pedido real 200 en 1.40 s |
+| `compose start mlflow` | `/health = ok` en **5.4 s** |
+| `compose down` y `up` sin `-v` | De nuevo sano en **26 s**; las 10 trazas se conservan |
+| Reiniciar la API con MLflow detenido | Arranca, `degradado`, atiende; al volver MLflow, `ok` en **7.0 s** y las solicitudes nuevas se trazan |
+| Desde cero con las imágenes ya construidas, y la prueba de humo de inmediato (lo que hace CI) | Sanos en **19 s**; las trazas llegan |
+
+**Límites aceptados:**
+
+- **Arranque de la API con MLflow caído:** las solicitudes que llegan antes de que aparezca MLflow no se trazan. El cliente liviano no puede crear la traza sin un experimento (`default_experiment_registry` no existe en `mlflow-tracing`), aunque el pedido se atiende igual. Cuando MLflow aparece, el hilo de D-010 crea el experimento en unos 2 s, y mientras tanto `/health` dice `degradado`.
+- **Windows con Podman:** `localhost` puede tardar 21 s en clientes que prueban primero IPv6. Está documentado en el README; no afecta a Docker en Linux o macOS.
