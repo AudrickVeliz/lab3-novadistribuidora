@@ -208,7 +208,7 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 
 **Decisión:**
 
-- **Arquitectura (elección de Audrick):** una cadena de una sola llamada, `prompt | modelo.with_structured_output(Interpretacion) .with_retry(2 intentos) .with_fallbacks([alterno])`.
+- **Arquitectura (elección de Audrick):** una cadena de una sola llamada, `prompt | modelo.with_structured_output(Interpretacion) .with_retry(2 intentos) .with_fallbacks([alterno])`. D-014 quita el reintento.
   - El mensaje de sistema lleva las reglas para *interpretar* y el catálogo completo: SKU, nombre, unidad de venta, unidades por empaque y alias, **sin precios**.
   - El mensaje humano lleva los mensajes del cliente, numerados y delimitados como datos.
 - **Modelos (elección de Audrick):**
@@ -393,7 +393,7 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 - **Seguridad:** las condiciones quedaron intactas en el **100 %** de los 744 casos evaluados con ambos modelos, incluidas las 10 inyecciones de cada corrida: ningún mensaje cambió un precio ni un descuento.
 - **Errores:** ninguno en las 6 corridas válidas.
 
-**Elección:** **Claude Haiku 5.5 como principal y GPT-6 Luna como alterno**, sin cambios respecto de D-009.
+**Elección:** **Claude Haiku 5.5 como principal y GPT-6 Luna como alterno**, sin cambios respecto de D-009. D-014 la revisa: con las instrucciones v3, GPT-6 Luna pasa a principal.
 
 - **Calidad:** Haiku acierta igual o más en ambos conjuntos y es más estable entre corridas (± 0.0 contra ± 1.4 en los propios).
 - **Latencia:** Haiku es **1.2 s más rápido** en la mediana. La evaluación mide latencia, y es lo que espera el tendero.
@@ -453,3 +453,80 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Quedarse en PostgreSQL 17 | Tiene soporte hasta 2029, pero el cambio es de una línea y conviene hacerlo antes de entregar, no después |
 | Mover todo el proyecto a Python 3.15 | Cambia el entorno de todas las pruebas justo antes de la entrega, sin ninguna ganancia para el producto |
 | Cerrar #9 sin configurar Dependabot | Volvería a abrirse con cada versión nueva de Python |
+
+## D-014: instrucciones v3, caché del prompt y GPT-6 Luna como principal
+
+**Fecha:** 2026-11-23
+
+**Contexto:** D-012 dejó tres mejoras pendientes: "50 libras de frijol" (P022) y "media docena de cloro" (P017) mal interpretados, y Haiku pagando en cada pedido los ~3,800 tokens de instrucciones y catálogo. Corregir el prompt con los 40 casos propios los convierte en casos de desarrollo, así que antes de tocarlo hacía falta un conjunto de prueba nuevo (decisión de Audrick).
+
+**Decisión:**
+
+- **Conjunto de prueba nuevo** (`evaluacion/casos_prueba.jsonl`, 15 casos, con su fuente en `fuente_casos_prueba.json`):
+  - se escribió y se guardó en su propio commit *antes* de cambiar las instrucciones;
+  - cubre libras, media docena y docena y media, docenas de fardos, una corrección a libras, dos inyecciones, agotados, un producto que no se vende, "lo de siempre" con latas y ambigüedades;
+  - los 40 propios pasan a ser de desarrollo, junto con los 84 publicados.
+- **Versión de las instrucciones:** cada corrida registra `VERSION_INSTRUCCIONES` como etiqueta y la huella SHA-256 del prompt; la evidencia compara por versión.
+- **v2, regla de unidades:**
+  - las libras de un producto de 1 lb son sueltas;
+  - media docena son 6 sueltas y docena y media son 18, sin convertir ni redondear;
+  - las docenas de fardos, cajas o displays son de venta.
+- **v3:** con v2, los dos modelos tomaban a veces "N + producto en plural sin unidad" como sueltas: "seis shampoo brisa" (D057), "3 papitas doradas" (D070), "cinco galletas saladdas crac" (D031).
+  - v3 aclara que sin unidad es de venta aunque el producto vaya en plural.
+  - El ejemplo, "tres detergentes espumoso", no está en ningún conjunto, para no inflar los resultados de desarrollo.
+  - El ajuste sale solo de casos de desarrollo: T002 ("media docena de leche vaquita"), que Haiku falla, no se tocó.
+- **Caché del prompt:** el mensaje de sistema va como un bloque con `cache_control` (`ephemeral`, 5 minutos), que OpenRouter pasa a Anthropic. OpenAI guarda su caché sin marca.
+- **GPT-6 Luna como principal y Claude Haiku 5.5 como alterno** (decisión de Audrick; revisa la elección de D-012).
+- **Sin reintento del principal:** si Luna falla (corte a los 10 s o un 429), responde Haiku directamente.
+
+**Resultados** (3 corridas por alternativa y versión, media de exactos; `evidencia/comparacion.md`):
+
+| Alternativa | Instrucciones | Prueba (15) | Propios (40) | Publicados (84) | Confirmados con error | Latencia p50, publicados | Costo por pedido, publicados |
+|---|---|---|---|---|---|---|---|
+| Haiku | v1 | 73.3 % | 97.5 % | 99.6 % | 7 | 1.77 s | US$0.00049 |
+| Haiku | v2 | 93.3 % | 99.2 % | 98.0 % | 1 | 2.25 s | US$0.00016 |
+| Haiku | v3 | 93.3 % | 100 % | 98.0 % | 4 | 2.06 s | US$0.00018 |
+| Luna | v1 | 75.6 % | 96.7 % | 98.4 % | 3 | 3.29 s | US$0.00011 |
+| Luna | v2 | 100 % | 100 % | 97.6 % | 0 | 3.49 s | US$0.00011 |
+| **Luna** | **v3** | **100 %** | **100 %** | **98.8 %** | **0** | 3.60 s | US$0.00011 |
+
+- **Confirmados con error:** fallos que salen con estado `confirmado` en las 3 corridas de los 139 casos, es decir, pedidos equivocados que nadie revisa. Los demás fallos van a revisión humana.
+- **Seguridad:** condiciones intactas en el 100 % de los 2,502 casos evaluados (18 corridas de 139).
+- **Errores:** ninguno. Las corridas v1 a v3 usaban todavía el reintento del principal, que absorbió los cortes de Luna.
+- **Caché:** Haiku lee de la caché 3,885 de sus 4,052 tokens de entrada (96 %), y su costo por pedido en los publicados baja de US$0.00049 a US$0.00016–0.00018. Luna ya leía 2,153 de 2,172 en D-012.
+- **La caché no hace más lento a Haiku:** en la evaluación, su pedido completo pasó de 1.72 s (v1) a 2.17 s (v2), aunque la llamada a OpenRouter siguió en 1.49 s y 1.47 s.
+  - Una medición intercalada con el mismo prompt, sin trazas, 20 llamadas por forma, dio una mediana de 1.35 s sin caché y **1.16 s con caché**.
+  - La diferencia está en las capas de la evaluación a esa hora: Luna, cuya caché no cambió, también subió 0.2 s.
+
+**Elección del principal:**
+
+- **Calidad:** Luna v3 acierta los 15 de prueba en las 3 corridas. Sus únicos fallos de desarrollo son "pasta" ambiguo con una opción de menos (D008, D014), que van a revisión.
+- **Errores que nadie revisa:** Haiku v3 confirmó 4 pedidos equivocados:
+  - "una docena de cloro blancura" como 12 cajas en lugar de 1 (D084, 2 de 3);
+  - "kola norte 600 ml: 5 y 6 de jabón" como 11 jabones (D035, 2 de 3).
+
+  Un pedido confirmado con 12 veces la cantidad llega al tendero sin revisión; un pendiente cuesta una revisión. Ante la duda, el producto no adivina.
+- **Latencia:** Luna tarda ~1.5 s más en la mediana (3.6 s contra 2.1 s en los publicados). Se acepta: el pedido llega por WhatsApp, no en una conversación en vivo.
+- **Costo:** con la caché, la diferencia es de US$0.00007 por pedido, unos US$0.07 por cada 1,000.
+- **Haiku como alterno:** es de otro proveedor y el más rápido, así que el pedido que pasa al alterno no espera más.
+
+**Sin reintento:**
+
+- En las corridas v3, 5 de 422 llamadas a Luna (~1 %) pasaron de 10 s. Con el reintento, el peor pedido tardó 25.4 s (D064: dos cortes y luego el alterno).
+- Sin reintento, un corte pasa a Haiku: unos 10 s más 1.3 s (mediana de Haiku).
+- Un 429 de la cuenta de desarrollo, que aparece con más de ~2 solicitudes a la vez, también pasa a Haiku en lugar de esperar otro intento.
+- **Límite aceptado:** una llamada respondió a los 30 s sin que el tiempo límite del cliente la cortara (P015, 1 de 839 llamadas de Luna en v2 y v3). Acotar el total exige un plazo propio por pedido, que se descartó para este cambio.
+
+**Uso de los casos de prueba:** v3 se ajustó solo con casos de desarrollo, pero los 15 de prueba ya se usaron para comparar v1, v2 y v3, así que sus resultados son optimistas. La prueba final es la del equipo docente, con mensajes no publicados.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Ajustar el prompt con los 40 propios, sin un conjunto nuevo | No quedaría ninguna prueba con mensajes que el prompt no vio |
+| Entregar v2 y documentar la regresión | Deja fallando tres casos de desarrollo con una causa conocida y una corrección simple |
+| Una v4 para corregir D084 en Haiku | En Haiku, cada ajuste de unidades arregló un caso y movió otro; sería otro uso de los 15 de prueba |
+| Mantener a Haiku como principal | 4 pedidos confirmados con error en 3 corridas, contra 0 de Luna |
+| Mantener 2 intentos del principal | Un corte de Luna suma otros 10 s antes del alterno: el peor caso medido fue de 25.4 s |
+| Un plazo total por pedido | Código nuevo para un caso de 1 en 839 llamadas |
+| Caché de 1 hora | Escribirla cuesta más, y entre pedidos seguidos bastan 5 minutos |

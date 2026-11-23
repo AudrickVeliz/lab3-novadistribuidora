@@ -96,23 +96,25 @@ docker compose start mlflow
 
 ## Reproducir la evaluación
 
-La comparación de alternativas (D-012) corre los 84 casos publicados
-(`ejemplos/mensajes_dev.jsonl`) y los 40 propios (`evaluacion/casos_propios.jsonl`, en el mismo
-formato) con cada modelo, los califica con código y registra un run por corrida en el
-experimento `evaluacion` de MLflow. Con el producto levantado y el entorno de desarrollo
+La comparación de alternativas (D-012, D-014) corre los 84 casos publicados
+(`ejemplos/mensajes_dev.jsonl`), los 40 propios de desarrollo (`evaluacion/casos_propios.jsonl`)
+y los 15 de prueba (`evaluacion/casos_prueba.jsonl`), en el mismo formato, con cada modelo. Los
+califica con código y registra un run por corrida en el experimento `evaluacion` de MLflow, con
+la versión de las instrucciones (`VERSION_INSTRUCCIONES`) como etiqueta. Con el producto levantado y el entorno de desarrollo
 (ver abajo):
 
 ```bash
-python tools/evaluar.py                 # Haiku 5.5 y GPT-6 Luna, 3 corridas cada uno
+python tools/evaluar.py                 # GPT-6 Luna y Haiku 5.5, 3 corridas cada uno
 python tools/evaluar.py --resumir       # solo regenera la evidencia desde MLflow
 ```
 
 El resultado queda en `evidencia/comparacion.md` y `evidencia/comparacion.csv`, y el detalle
 de cada caso, con su traza, en http://localhost:5000 (experimento `evaluacion`).
 
-Los casos propios se escriben en `evaluacion/fuente_casos_propios.json` con su interpretación
-correcta; `python tools/generar_casos_propios.py` calcula la respuesta esperada con el motor de
-reglas y regenera el `.jsonl`.
+Los casos propios y los de prueba se escriben en `evaluacion/fuente_casos_propios.json` y
+`evaluacion/fuente_casos_prueba.json` con su interpretación correcta;
+`python tools/generar_casos_propios.py` calcula la respuesta esperada con el motor de reglas y
+regenera los `.jsonl`.
 
 ## Desarrollo local
 
