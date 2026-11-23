@@ -1,6 +1,6 @@
 # Imagen de la API (D-011). Los datos y las credenciales no forman parte de la imagen:
 # los datos llegan por volumen de solo lectura y la clave, por variables de entorno.
-FROM docker.io/library/python:3.12.16-slim-bookworm
+FROM docker.io/library/python:3.15.2-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
