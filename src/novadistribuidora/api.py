@@ -1,5 +1,6 @@
 """API HTTP del contrato del Anexo. Es delgada: valida, delega en Servicio y traduce errores."""
 
+import logging
 from collections.abc import Sequence
 from typing import Any
 
@@ -30,6 +31,12 @@ MOTIVOS_422 = {
     "datetime_from_date_parsing": "no es una fecha y hora válida (AAAA-MM-DDTHH:MM)",
     "datetime_parsing": "no es una fecha y hora válida (AAAA-MM-DDTHH:MM)",
 }
+# El cliente ve textos fijos; los modelos y la causa de la falla quedan en el log y la traza
+# (D-008): una respuesta HTTP no muestra detalles internos de una excepción.
+MOTIVO_404 = "No existe el cliente {cliente_id}"
+MOTIVO_503 = "El modelo no pudo interpretar el mensaje; intente de nuevo en unos segundos"
+
+registro = logging.getLogger(__name__)
 
 
 def crear_app(servicio: Servicio) -> FastAPI:
@@ -55,10 +62,12 @@ def crear_app(servicio: Servicio) -> FastAPI:
     def interpretar(solicitud: SolicitudInterpretar) -> RespuestaInterpretar | JSONResponse:
         try:
             return servicio.interpretar_pedido(solicitud)
-        except ClienteNoExiste as error:
-            return JSONResponse({"detail": str(error)}, status_code=404)
+        except ClienteNoExiste:
+            motivo = MOTIVO_404.format(cliente_id=solicitud.cliente_id)
+            return JSONResponse({"detail": motivo}, status_code=404)
         except InterpreteNoDisponible as error:
-            return JSONResponse({"detail": str(error)}, status_code=503)
+            registro.warning("Pedido sin interpretar (503): %s", error)
+            return JSONResponse({"detail": MOTIVO_503}, status_code=503)
 
     @app.get("/health", response_model=EstadoServicio, response_model_exclude_none=True)
     def health() -> EstadoServicio:
