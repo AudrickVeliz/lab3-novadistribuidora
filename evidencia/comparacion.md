@@ -1,23 +1,61 @@
 # Comparación de alternativas del intérprete
 
-Generado por `tools/evaluar.py` (D-012). Media ± desviación estándar entre corridas.
+Generado por `tools/evaluar.py` (D-012, D-014). Media ± desviación estándar entre corridas.
 
-| Alternativa | Conjunto | Corridas | Exactos | Estado | Líneas | Pendientes | Condiciones intactas | Errores | Latencia p50 (s) | Latencia p95 (s) | Costo por pedido (US$) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| haiku | propios (40) | 3 | 97.5% ± 0.0% | 97.5% ± 0.0% | 97.5% ± 0.0% | 98.3% ± 1.4% | 100% ± 0% | 0.0 ± 0.0 | 1.45 ± 0.11 | 2.84 ± 0.29 | 0.00045 ± 0.00001 |
-| haiku | publicados (84) | 3 | 99.6% ± 0.7% | 100.0% ± 0.0% | 99.6% ± 0.7% | 99.6% ± 0.7% | 100% ± 0% | 0.0 ± 0.0 | 1.62 ± 0.07 | 3.57 ± 0.24 | 0.00049 ± 0.00000 |
-| luna | propios (40) | 3 | 96.7% ± 1.4% | 96.7% ± 1.4% | 96.7% ± 1.4% | 99.2% ± 1.4% | 100% ± 0% | 0.0 ± 0.0 | 2.65 ± 0.08 | 4.74 ± 1.17 | 0.00009 ± 0.00001 |
-| luna | publicados (84) | 3 | 98.8% ± 1.2% | 100.0% ± 0.0% | 99.6% ± 0.7% | 98.8% ± 1.2% | 100% ± 0% | 0.0 ± 0.0 | 2.75 ± 0.03 | 3.85 ± 0.16 | 0.00010 ± 0.00000 |
+| Alternativa | Instrucciones | Conjunto | Corridas | Exactos | Estado | Líneas | Pendientes | Condiciones intactas | Errores | Latencia p50 (s) | Latencia p95 (s) | Costo por pedido (US$) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| haiku | v1 | propios (40) | 3 | 97.5% ± 2.5% | 97.5% ± 2.5% | 97.5% ± 2.5% | 99.2% ± 1.4% | 100% ± 0% | 0.0 ± 0.0 | 1.69 ± 0.04 | 3.48 ± 0.45 | 0.00046 ± 0.00001 |
+| haiku | v1 | prueba (15) | 3 | 73.3% ± 0.0% | 73.3% ± 0.0% | 73.3% ± 0.0% | 86.7% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 1.64 ± 0.16 | 4.34 ± 0.49 | 0.00048 ± 0.00001 |
+| haiku | v1 | publicados (84) | 3 | 99.6% ± 0.7% | 99.6% ± 0.7% | 99.6% ± 0.7% | 99.6% ± 0.7% | 100% ± 0% | 0.0 ± 0.0 | 1.77 ± 0.08 | 3.84 ± 0.32 | 0.00049 ± 0.00000 |
+| haiku | v2 | propios (40) | 3 | 99.2% ± 1.4% | 99.2% ± 1.4% | 99.2% ± 1.4% | 99.2% ± 1.4% | 100% ± 0% | 0.0 ± 0.0 | 2.15 ± 0.05 | 3.33 ± 0.27 | 0.00012 ± 0.00000 |
+| haiku | v2 | prueba (15) | 3 | 93.3% ± 0.0% | 100.0% ± 0.0% | 93.3% ± 0.0% | 93.3% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 2.05 ± 0.23 | 2.61 ± 0.13 | 0.00011 ± 0.00001 |
+| haiku | v2 | publicados (84) | 3 | 98.0% ± 0.7% | 98.8% ± 0.0% | 98.4% ± 0.7% | 98.4% ± 0.7% | 100% ± 0% | 0.0 ± 0.0 | 2.25 ± 0.12 | 4.26 ± 0.47 | 0.00016 ± 0.00001 |
+| haiku | v3 | propios (40) | 3 | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 1.97 ± 0.14 | 2.98 ± 0.12 | 0.00012 ± 0.00000 |
+| haiku | v3 | prueba (15) | 3 | 93.3% ± 0.0% | 100.0% ± 0.0% | 93.3% ± 0.0% | 93.3% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 1.71 ± 0.02 | 2.45 ± 0.13 | 0.00012 ± 0.00002 |
+| haiku | v3 | publicados (84) | 3 | 98.0% ± 0.7% | 100.0% ± 0.0% | 98.0% ± 0.7% | 99.6% ± 0.7% | 100% ± 0% | 0.0 ± 0.0 | 2.06 ± 0.07 | 4.35 ± 0.38 | 0.00018 ± 0.00002 |
+| luna | v1 | propios (40) | 3 | 96.7% ± 1.4% | 96.7% ± 1.4% | 96.7% ± 1.4% | 99.2% ± 1.4% | 100% ± 0% | 0.0 ± 0.0 | 3.18 ± 0.13 | 4.85 ± 0.79 | 0.00009 ± 0.00000 |
+| luna | v1 | prueba (15) | 3 | 75.6% ± 3.8% | 77.8% ± 3.8% | 75.6% ± 3.8% | 93.3% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.02 ± 0.44 | 7.68 ± 2.50 | 0.00013 ± 0.00002 |
+| luna | v1 | publicados (84) | 3 | 98.4% ± 0.7% | 100.0% ± 0.0% | 99.6% ± 0.7% | 98.4% ± 0.7% | 100% ± 0% | 0.0 ± 0.0 | 3.29 ± 0.18 | 4.99 ± 0.20 | 0.00011 ± 0.00000 |
+| luna | v2 | propios (40) | 3 | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.23 ± 0.15 | 4.77 ± 0.25 | 0.00009 ± 0.00001 |
+| luna | v2 | prueba (15) | 3 | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.47 ± 0.30 | 4.68 ± 1.10 | 0.00009 ± 0.00000 |
+| luna | v2 | publicados (84) | 3 | 97.6% ± 0.0% | 100.0% ± 0.0% | 99.2% ± 0.7% | 97.6% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.49 ± 0.15 | 4.74 ± 0.26 | 0.00011 ± 0.00000 |
+| luna | v3 | propios (40) | 3 | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.39 ± 0.15 | 4.71 ± 0.27 | 0.00008 ± 0.00000 |
+| luna | v3 | prueba (15) | 3 | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100.0% ± 0.0% | 100% ± 0% | 0.0 ± 0.0 | 3.36 ± 0.22 | 3.94 ± 0.33 | 0.00008 ± 0.00000 |
+| luna | v3 | publicados (84) | 3 | 98.8% ± 1.2% | 100.0% ± 0.0% | 100.0% ± 0.0% | 98.8% ± 1.2% | 100% ± 0% | 0.0 ± 0.0 | 3.60 ± 0.23 | 5.33 ± 0.08 | 0.00011 ± 0.00000 |
 
 ## Casos fallidos
 
-| Alternativa | Caso | Tipo | Corridas fallidas |
-|---|---|---|---|
-| haiku | P017 | unidades | 2 de 3 |
-| haiku | P022 | unidades | 1 de 3 |
-| haiku | D048 | no_existe | 1 de 3 |
-| luna | P017 | unidades | 1 de 3 |
-| luna | P022 | unidades | 3 de 3 |
-| luna | D008 | ambiguo | 1 de 3 |
-| luna | D014 | ambiguo | 1 de 3 |
-| luna | D031 | habitual | 1 de 3 |
+| Alternativa | Instrucciones | Caso | Tipo | Corridas fallidas |
+|---|---|---|---|---|
+| haiku | v1 | P017 | unidades | 1 de 3 |
+| haiku | v1 | P022 | unidades | 2 de 3 |
+| haiku | v1 | T001 | unidades | 1 de 3 |
+| haiku | v1 | T002 | unidades | 3 de 3 |
+| haiku | v1 | T003 | unidades | 3 de 3 |
+| haiku | v1 | T004 | unidades | 3 de 3 |
+| haiku | v1 | T008 | correccion | 2 de 3 |
+| haiku | v1 | D021 | correccion | 1 de 3 |
+| haiku | v2 | P022 | unidades | 1 de 3 |
+| haiku | v2 | T002 | unidades | 3 de 3 |
+| haiku | v2 | D008 | ambiguo | 1 de 3 |
+| haiku | v2 | D035 | simple | 1 de 3 |
+| haiku | v2 | D057 | simple | 2 de 3 |
+| haiku | v2 | D070 | correccion | 1 de 3 |
+| haiku | v3 | T002 | unidades | 3 de 3 |
+| haiku | v3 | D035 | simple | 2 de 3 |
+| haiku | v3 | D048 | no_existe | 1 de 3 |
+| haiku | v3 | D084 | unidades | 2 de 3 |
+| luna | v1 | P017 | unidades | 1 de 3 |
+| luna | v1 | P022 | unidades | 3 de 3 |
+| luna | v1 | T001 | unidades | 3 de 3 |
+| luna | v1 | T002 | unidades | 1 de 3 |
+| luna | v1 | T003 | unidades | 2 de 3 |
+| luna | v1 | T004 | unidades | 3 de 3 |
+| luna | v1 | T008 | correccion | 2 de 3 |
+| luna | v1 | D008 | ambiguo | 3 de 3 |
+| luna | v1 | D031 | habitual | 1 de 3 |
+| luna | v2 | D008 | ambiguo | 1 de 3 |
+| luna | v2 | D014 | ambiguo | 3 de 3 |
+| luna | v2 | D031 | habitual | 2 de 3 |
+| luna | v3 | D008 | ambiguo | 2 de 3 |
+| luna | v3 | D014 | ambiguo | 1 de 3 |
