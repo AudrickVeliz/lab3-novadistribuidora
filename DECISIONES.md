@@ -296,7 +296,7 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 |---|---|---|---|
 | `api` | `localhost/novadistribuidora:0.1.0` (`Containerfile`) | `8000` | El servicio del Anexo |
 | `mlflow` | `localhost/novadistribuidora-mlflow:3.18.0` (`Containerfile.mlflow`: oficial `v3.18.0` + `psycopg 3.3.9`) | `127.0.0.1:5000` | Trazas; artefactos servidos por HTTP |
-| `bd-mlflow` | `postgres:17.12` | ninguno | Almacén de MLflow |
+| `bd-mlflow` | `postgres:18.6` (desde D-013; antes 17.12) | ninguno | Almacén de MLflow |
 
 - **Nombres de Podman:** `compose.yaml`, `Containerfile` y `.containerignore`.
   - Docker solo detecta `Dockerfile`, así que el compose indica `dockerfile:`.
@@ -417,3 +417,39 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Escribir la respuesta esperada de los casos propios a mano | Montos, descuentos y fechas calculados a mano son una fuente de errores; la interpretación a mano y el motor verificado separan lo que se afirma de lo que se calcula |
 | Una sola corrida | Las diferencias entre modelos son de 1 caso; sin repetir no se distinguen del azar |
 | Ajustar el prompt con los 40 casos propios | Dejarían de ser un conjunto de prueba |
+
+## D-013: PostgreSQL 18 y Python 3.12 fijo ante Dependabot
+
+**Fecha:** 2026-11-23
+
+**Contexto:** Dependabot abrió dos PR con saltos de versión: Python 3.12.16 → 3.15.2 en la imagen de la API (#9) y PostgreSQL 17.12 → 18.6 en la base de MLflow (#10). El enunciado no fija versiones; Python 3.12 es una regla del proyecto (`CLAUDE.md`, `requires-python`). Los dos PR fallaron el trabajo `contenedores` de CI:
+
+- **#9:** `Package 'novadistribuidora' requires a different Python: 3.15.2 not in '<3.13,>=3.12'`. Dependabot cambia la imagen, pero el código se prueba en 3.12.
+- **#10:** desde la 18, la imagen de PostgreSQL guarda los datos en una carpeta por versión mayor (`/var/lib/postgresql/18/docker`) y se niega a arrancar si el volumen se monta en `/var/lib/postgresql/data`.
+
+**Decisión:**
+
+- **PostgreSQL 18.6**, montando el volumen en `/var/lib/postgresql`:
+  - el equipo docente arranca con un volumen vacío y no nota el cambio;
+  - el volumen de desarrollo, con datos de la 17, se migró con `pg_dumpall` y `psql`.
+- **Python se queda en 3.12:** Dependabot ignora los saltos de versión mayor y menor de `library/python` y sigue proponiendo los parches (3.12.x).
+  - Pasar a 3.15 es mover a la vez el entorno conda, CI, `pyproject.toml` y `CLAUDE.md`, y confirmar que pyarrow, psycopg, pydantic y mlflow ya publican paquetes para una versión que salió en octubre de 2026;
+  - 3.12 recibe parches de seguridad hasta octubre de 2028.
+- #9 y #10 se cierran: este PR reemplaza a #10.
+
+**Verificación** de la migración con Podman:
+
+| Prueba | Resultado |
+|---|---|
+| Contenido antes (17.12) y después (18.6) | 12 runs, 1,374 trazas y 4 experimentos en ambas |
+| `tools/evaluar.py --resumir` desde la base migrada | `evidencia/comparacion.md` y `.csv` idénticos a los versionados |
+| `tools/prueba_de_humo.py --pedido 200` | `/health` ok, 422, 404, pedido real 200 en 2.45 s, trazas en MLflow |
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Integrar #10 tal cual | La base no arranca: CI lo detectó |
+| Quedarse en PostgreSQL 17 | Tiene soporte hasta 2029, pero el cambio es de una línea y conviene hacerlo antes de entregar, no después |
+| Mover todo el proyecto a Python 3.15 | Cambia el entorno de todas las pruebas justo antes de la entrega, sin ninguna ganancia para el producto |
+| Cerrar #9 sin configurar Dependabot | Volvería a abrirse con cada versión nueva de Python |
