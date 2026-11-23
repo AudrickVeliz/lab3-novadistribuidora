@@ -1,0 +1,102 @@
+# Producto completo con un solo comando (D-011). Funciona sin cambios en Podman rootless y en Docker.
+#
+#   cp .env.example .env      # y escribir OPENROUTER_API_KEY
+#   docker compose up -d      # o: podman compose up -d
+#
+# Los archivos publicados se colocan en ./datos antes de levantar (ver README.md).
+name: novadistribuidora
+
+services:
+  api:
+    image: localhost/novadistribuidora:0.1.0
+    build:
+      context: .
+      # Docker solo detecta "Dockerfile" por sí solo: el nombre se indica.
+      dockerfile: Containerfile
+    # La clave y la configuración del modelo; si falta .env, compose se detiene y lo dice.
+    env_file: .env
+    environment:
+      CARPETA_DATOS: /datos
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ./datos:/datos:ro
+    ports:
+      - "8000:8000"
+    # Aquí y no en el Containerfile: el formato OCI de Podman descarta HEALTHCHECK.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+    # Sin depends_on de MLflow: la API arranca y atiende aunque MLflow no esté (D-010).
+    restart: unless-stopped
+
+  mlflow:
+    image: localhost/novadistribuidora-mlflow:3.18.0
+    build:
+      context: .
+      dockerfile: Containerfile.mlflow
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg://mlflow@bd-mlflow:5432/mlflow
+      # Los artefactos los guarda y sirve el propio servidor: los clientes no comparten carpetas.
+      - --serve-artifacts
+      - --artifacts-destination=/mlflow/artefactos
+      # MLflow 3 rechaza los Host que no conoce (protección contra DNS rebinding): se permiten
+      # el nombre del servicio en la red y el acceso desde la máquina, sin desactivarla.
+      - --allowed-hosts=mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+      - --workers=2
+    environment:
+      # El ejecutor de trabajos de GenAI del servidor no se usa y ocupa memoria y una CPU.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    volumes:
+      - mlflow-artefactos:/mlflow/artefactos
+    # Solo en la máquina: MLflow no tiene autenticación (D-011).
+    ports:
+      - "127.0.0.1:5000:5000"
+    networks:
+      - default
+      - interna-mlflow
+    depends_on:
+      bd-mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+  bd-mlflow:
+    image: docker.io/library/postgres:17.12
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_DB: mlflow
+      # Sin contraseña en el repositorio: la base solo es alcanzable desde la red interna, donde
+      # el único cliente es el servidor de MLflow, y no publica puertos (D-011).
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - bd-mlflow:/var/lib/postgresql/data
+    networks:
+      - interna-mlflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+networks:
+  # internal: sin salida a internet ni acceso desde la máquina; la API no está en esta red.
+  interna-mlflow:
+    internal: true
+
+# Volúmenes con nombre: sobreviven a "compose down" (sin -v), funcionan igual en Podman y Docker,
+# y OneDrive no intenta sincronizar los archivos de la base.
+volumes:
+  bd-mlflow:
+  mlflow-artefactos:
