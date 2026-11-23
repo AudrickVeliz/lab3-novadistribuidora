@@ -70,8 +70,8 @@ curl -X POST http://localhost:8000/v1/pedidos/interpretar \
 | Variable | Para qué | Por omisión |
 |---|---|---|
 | `OPENROUTER_API_KEY` | Clave de OpenRouter | (obligatoria) |
-| `MODELO` | Modelo que interpreta los mensajes | `anthropic/claude-haiku-5.5` |
-| `MODELO_ALTERNO` | Modelo que responde si el principal falla | `openai/gpt-6-luna` |
+| `MODELO` | Modelo que interpreta los mensajes | `openai/gpt-6-luna` |
+| `MODELO_ALTERNO` | Modelo que responde si el principal falla | `anthropic/claude-haiku-5.5` |
 | `TIEMPO_LIMITE_MODELO_S` | Segundos máximos por llamada al modelo | `10` |
 | `CARPETA_DATOS` | Carpeta de los parquet publicados | `datos` (en el compose, `/datos`) |
 | `MLFLOW_TRACKING_URI` | Servidor de MLflow que recibe las trazas | `http://localhost:5000` (en el compose, `http://mlflow:5000`) |

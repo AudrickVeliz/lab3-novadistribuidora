@@ -135,8 +135,8 @@ def test_una_respuesta_sin_interpretacion_no_esta_disponible():
 def test_crear_interprete_con_openrouter_no_llama_a_la_red(datos):
     configuracion = Configuracion(
         openrouter_api_key="clave-de-prueba",
-        modelo="anthropic/claude-haiku-5.5",
-        modelo_alterno="openai/gpt-6-luna",
+        modelo="openai/gpt-6-luna",
+        modelo_alterno="anthropic/claude-haiku-5.5",
         carpeta_datos=Path("datos"),
         tiempo_limite_s=5,
         mlflow_tracking_uri="http://localhost:5000",
