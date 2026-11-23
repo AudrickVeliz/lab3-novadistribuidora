@@ -1,11 +1,24 @@
 """Catálogo mínimo para las pruebas de políticas: los mismos SKU y valores que los datos publicados,
 para que cada caso se pueda contrastar con politicas.md sin depender de los archivos."""
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from novadistribuidora.datos import Escala, Producto
+from novadistribuidora.datos import Cliente, Datos, Escala, Producto, RegistroHistorial
+
+# Unidad de venta de los SKU que no se venden por fardo, como en productos.parquet.
+UNIDADES = {
+    "A02": "quintal",
+    "A06": "caja",
+    "A07": "caja",
+    "L03": "caja",
+    "P04": "caja",
+    "S02": "display",
+    "S05": "display",
+    "X01": "display",
+}
 
 
 def _producto(sku, nombre, categoria, empaque, precio, disponible=True, sustituto=None):
@@ -13,7 +26,7 @@ def _producto(sku, nombre, categoria, empaque, precio, disponible=True, sustitut
         sku=sku,
         nombre=nombre,
         categoria=categoria,
-        unidad_venta="fardo",
+        unidad_venta=UNIDADES.get(sku, "fardo"),
         unidades_por_empaque=empaque,
         precio=Decimal(precio),
         disponible=disponible,
@@ -48,3 +61,27 @@ def escalas():
         "bebidas": (Escala(10, 3), Escala(20, 5)),
         "abarrotes": (Escala(5, 2), Escala(10, 4)),
     }
+
+
+@pytest.fixture
+def cliente():
+    # Ruta de lunes y jueves (0 y 3), con Q6,800 de crédito disponible.
+    return Cliente(
+        "C001",
+        "Tienda La Bendición",
+        "Marta López",
+        frozenset({0, 3}),
+        Decimal(8000),
+        Decimal(1200),
+    )
+
+
+@pytest.fixture
+def datos(productos, escalas, cliente):
+    historial = (
+        RegistroHistorial("PED-1", "C001", date(2026, 11, 16), "B01", 2, "entregado"),
+        RegistroHistorial("PED-2", "C001", date(2026, 11, 19), "A07", 1, "entregado"),
+        RegistroHistorial("PED-2", "C001", date(2026, 11, 19), "P04", 2, "entregado"),
+        RegistroHistorial("PED-2", "C001", date(2026, 11, 19), "B04", 3, "entregado"),
+    )
+    return Datos(productos, escalas, {cliente.cliente_id: cliente}, historial)
