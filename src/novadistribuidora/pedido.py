@@ -1,6 +1,7 @@
 """Las piezas del pedido que propone el servicio, con los nombres y valores del Anexo."""
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
@@ -41,3 +42,16 @@ class Pendiente:
     motivo: Motivo
     texto: str
     opciones: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Pedido:
+    """El pedido calculado. mensaje_cliente se redacta aparte, a partir de este resultado."""
+
+    estado: Estado
+    lineas: tuple[Linea, ...]
+    total: Decimal
+    fecha_entrega: date | None
+    sustituciones: tuple[Sustitucion, ...]
+    pendientes: tuple[Pendiente, ...]
+    motivos_revision: tuple[Motivo, ...]
