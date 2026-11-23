@@ -296,7 +296,7 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 |---|---|---|---|
 | `api` | `localhost/novadistribuidora:0.1.0` (`Containerfile`) | `8000` | El servicio del Anexo |
 | `mlflow` | `localhost/novadistribuidora-mlflow:3.18.0` (`Containerfile.mlflow`: oficial `v3.18.0` + `psycopg 3.3.9`) | `127.0.0.1:5000` | Trazas; artefactos servidos por HTTP |
-| `bd-mlflow` | `postgres:18.6` (desde D-013; antes 17.12) | ninguno | Almacén de MLflow |
+| `bd-mlflow` | `postgres:19.0` (desde D-013; antes 17.12 y 18.6) | ninguno | Almacén de MLflow |
 
 - **Nombres de Podman:** `compose.yaml`, `Containerfile` y `.containerignore`.
   - Docker solo detecta `Dockerfile`, así que el compose indica `dockerfile:`.
@@ -444,6 +444,18 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Contenido antes (17.12) y después (18.6) | 12 runs, 1,374 trazas y 4 experimentos en ambas |
 | `tools/evaluar.py --resumir` desde la base migrada | `evidencia/comparacion.md` y `.csv` idénticos a los versionados |
 | `tools/prueba_de_humo.py --pedido 200` | `/health` ok, 422, 404, pedido real 200 en 2.45 s, trazas en MLflow |
+
+**Actualización a PostgreSQL 19.0** (2026-11-23): Dependabot la propuso en #13 y se integró con `contenedores` en verde, porque el montaje en `/var/lib/postgresql` ya sirve para cualquier versión mayor y CI arranca con un volumen vacío. El volumen de desarrollo se migró con el mismo procedimiento:
+
+1. Detener la API y MLflow para que nadie escriba, y volcar la base con `pg_dumpall`.
+2. Exportar el volumen de la 18 con `podman volume export`, para volver atrás si algo fallaba.
+3. Borrar el volumen, arrancar la 19 vacía, borrar su base `mlflow` recién creada y restaurar el volcado. El único error fue el esperado: el rol `mlflow` ya existía.
+
+| Prueba | Resultado |
+|---|---|
+| Contenido antes (18.6) y después (19.0) | 4 experimentos, 31 runs, 3,975 trazas, 40,471 spans y 36,729 evaluaciones en ambas |
+| `tools/evaluar.py --resumir` desde la base migrada | `evidencia/comparacion.md` y `.csv` idénticos a los versionados |
+| `tools/prueba_de_humo.py --pedido 200` | `/health` ok, 422, 404, pedido real 200 en 2.87 s, trazas en MLflow |
 
 **Alternativas:**
 
