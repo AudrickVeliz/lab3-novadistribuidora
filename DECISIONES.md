@@ -131,7 +131,14 @@ Si algo falla, lanza `DatosInvalidos` con un mensaje que dice qué revisar. Los 
 | Repositorio | `main` exige `calidad`, `pytest` y `flujo`; CodeQL, escaneo de secretos con bloqueo al hacer push, alertas y actualizaciones de seguridad de Dependabot; plantilla de PR y CODEOWNERS |
 | Local | `tools/verificar.py` corre lo mismo que CI, para no depender de CI para enterarse de un error |
 
-Lo que depende de piezas que todavía no existen se agrega con ellas: construir y escanear la imagen, y levantar `docker compose` con una prueba de humo en CI, en el paso 5; publicar las imágenes al crear el tag `entrega-lab3`, en el paso 7.
+Lo que depende de piezas que todavía no existen se agrega con ellas: construir y escanear la imagen, y levantar `docker compose` con una prueba de humo en CI, en el paso 5 (D-011).
+
+**No se publican imágenes** (decisión de Audrick en el paso 7, que reemplaza la publicación al crear el tag):
+
+- el equipo docente clona el tag y construye con `docker compose up`, porque el compose trae `build:`: una imagen publicada no se usaría;
+- publicarlas exige un workflow con `packages: write`, contra la regla de permisos de solo lectura;
+- sería otra copia de la versión entregada que mantener igual al código del tag;
+- lo que la publicación aportaría ya lo cubre `contenedores` en cada PR: la imagen se construye, se escanea con Trivy y se prueba con compose.
 
 **Alternativas:**
 
@@ -141,6 +148,7 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | `pre-commit` (el framework) | Descarga sus herramientas en una caché fuera del proyecto y agrega otra configuración; los hooks de `.githooks` y `tools/verificar.py` usan las mismas versiones que `pyproject.toml` |
 | `flake8`, `black`, `isort` y `bandit` por separado | Cuatro herramientas y configuraciones para lo que `ruff` hace en una sola, mucho más rápido |
 | Acciones por etiqueta (`@v7`) | La etiqueta se puede mover a otro código; el SHA no |
+| Publicar las imágenes en GHCR con el tag `entrega-lab3` | El equipo docente construye desde el tag; publicar exige permisos de escritura en el workflow y no aporta a la evaluación |
 
 **Justificación:** cada capa detecta una clase de error distinta antes de llegar a `main`, y todo corre igual en local que en CI. Como el repositorio es público, CodeQL, el escaneo de secretos y Dependabot no tienen costo.
 
