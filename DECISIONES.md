@@ -186,7 +186,8 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | `fecha_hora` | `AAAA-MM-DDTHH:MM` estricto; se toleran los segundos; zona horaria, espacio o fecha imposible son 422 | Los segundos no cambian la entrega; el resto no es la hora de Guatemala del Anexo |
 | Campos no definidos | Se ignoran (decisión de Audrick) | El Anexo no los declara inválidos; un campo de más no debe costarle el pedido al cliente |
 | Tamaño | Máximo 20 mensajes y 2,000 caracteres por mensaje; lo que exceda es 422 (decisión de Audrick) | Los 84 ejemplos llegan a 3 mensajes y 184 caracteres; el límite acota la latencia y el costo del modelo |
-| Modelo no disponible | Reintento y modelo alterno (paso 3); si ambos fallan, 503 con el motivo (decisión de Audrick) | No hay motivo del contrato para "no se pudo interpretar", y un pedido vacío en revisión violaría el Anexo |
+| Modelo no disponible | Modelo alterno (paso 3; sin reintento desde D-014); si ambos fallan, 503 con el motivo (decisión de Audrick) | No hay motivo del contrato para "no se pudo interpretar", y un pedido vacío en revisión violaría el Anexo |
+| Texto de los errores 404 y 503 | Textos fijos de `api.py` ("No existe el cliente C999"; "El modelo no pudo interpretar el mensaje; intente de nuevo en unos segundos"). Los modelos y la causa de un 503 van al log del servicio y a la traza | CodeQL (`py/stack-trace-exposure`) marcó `str(error)` en la respuesta: no había traza de pila, pero el 503 le mostraba al cliente los modelos, el proveedor y el tipo de excepción |
 | `/health` | Siempre 200; `degradado` con `motivo` si falla un chequeo inyectado (MLflow en el paso 4) | El Anexo pide que el servicio responda y lo refleje; el Lab 2 usaba 503, aquí no |
 | Montos | `Decimal` en el cálculo, número JSON en la respuesta | El Anexo los muestra como números (`120.00`); Pydantic serializaría `Decimal` como texto |
 
