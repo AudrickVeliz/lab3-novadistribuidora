@@ -4,15 +4,22 @@ Laboratorio 3 de Product Development (Universidad Galileo). Aplicación con mode
 que convierte los mensajes informales de WhatsApp de los tenderos en pedidos estructurados,
 aplica las políticas de la empresa y envía a revisión humana lo que no puede resolver con certeza.
 
-> En construcción: las capturas de MLflow de `evidencia/` y el tag de entrega se completan en
-> los siguientes PR.
+La versión entregada es el tag `entrega-lab3`. Las decisiones, con sus alternativas, están en
+[DECISIONES.md](DECISIONES.md), y la evidencia de MLflow en [evidencia/](evidencia/).
 
 ## Levantar el producto
 
 Requiere Docker con Compose, o Podman con `podman compose`. Los comandos son los mismos con
 cualquiera de los dos (`docker compose ...` o `podman compose ...`).
 
-1. **Archivos publicados.** Descomprima el archivo publicado por el equipo docente **en la raíz
+1. **Código.** Clone la versión entregada:
+
+   ```bash
+   git clone --branch entrega-lab3 https://github.com/AudrickVeliz/lab3-novadistribuidora.git
+   cd lab3-novadistribuidora
+   ```
+
+2. **Archivos publicados.** Descomprima el archivo publicado por el equipo docente **en la raíz
    del repositorio**, de modo que queden así (Git los ignora):
 
    ```
@@ -26,13 +33,13 @@ cualquiera de los dos (`docker compose ...` o `podman compose ...`).
    catalogo_problemas.md
    ```
 
-2. **Configuración.** Copie `.env.example` como `.env` y escriba su clave en `OPENROUTER_API_KEY`:
+3. **Configuración.** Copie `.env.example` como `.env` y escriba su clave en `OPENROUTER_API_KEY`:
 
    ```bash
    cp .env.example .env
    ```
 
-3. **Levantar** (la primera vez construye las imágenes, unos 3 minutos):
+4. **Levantar** (la primera vez construye las imágenes, unos 3 minutos):
 
    ```bash
    docker compose up -d --wait
@@ -100,8 +107,8 @@ La comparación de alternativas (D-012, D-014) corre los 84 casos publicados
 (`ejemplos/mensajes_dev.jsonl`), los 40 propios de desarrollo (`evaluacion/casos_propios.jsonl`)
 y los 15 de prueba (`evaluacion/casos_prueba.jsonl`), en el mismo formato, con cada modelo. Los
 califica con código y registra un run por corrida en el experimento `evaluacion` de MLflow, con
-la versión de las instrucciones (`VERSION_INSTRUCCIONES`) como etiqueta. Con el producto levantado y el entorno de desarrollo
-(ver abajo):
+la versión de las instrucciones (`VERSION_INSTRUCCIONES`) como etiqueta. Con el producto
+levantado y el entorno de desarrollo (ver abajo):
 
 ```bash
 python tools/evaluar.py                 # GPT-6 Luna y Haiku 5.5, 3 corridas cada uno
@@ -115,6 +122,38 @@ Los casos propios y los de prueba se escriben en `evaluacion/fuente_casos_propio
 `evaluacion/fuente_casos_prueba.json` con su interpretación correcta;
 `python tools/generar_casos_propios.py` calcula la respuesta esperada con el motor de reglas y
 regenera los `.jsonl`.
+
+## Resultados
+
+Configuración entregada: **GPT-6 Luna** como principal y **Claude Haiku 5.5** como alterno, con
+las instrucciones v3 (D-014). Media de 3 corridas de Luna:
+
+| Conjunto | Exactos | Latencia p50 | Costo por pedido |
+|---|---|---|---|
+| Prueba (15, escritos antes de ajustar las instrucciones) | 100 % | 3.4 s | US$0.00008 |
+| Propios de desarrollo (40) | 100 % | 3.4 s | US$0.00008 |
+| Publicados (84) | 98.8 % | 3.6 s | US$0.00011 |
+
+- **Pedidos confirmados con error:** ninguno con Luna. Sus fallos son pendientes de "pasta"
+  ambiguo, que van a revisión humana; Haiku confirmó 4 pedidos equivocados en 3 corridas.
+- **Condiciones intactas:** en el 100 % de los 2,502 casos evaluados (18 corridas, incluidas las
+  inyecciones): ningún mensaje cambió un precio ni un descuento.
+
+La comparación completa (v1, v2 y v3 con los dos modelos) está en
+[evidencia/comparacion.md](evidencia/comparacion.md), y el análisis en D-012 y D-014.
+
+## Estructura del repositorio
+
+| Ruta | Qué contiene |
+|---|---|
+| `src/novadistribuidora/` | `interprete.py` (cadena de LangChain y prompt), `interpretacion.py` (salida estructurada), `politicas.py` y `motor.py` (reglas de `politicas.md`), `confirmacion.py`, `servicio.py`, `api.py` (contrato del Anexo) y `trazas.py` (MLflow) |
+| `tests/` | Pruebas con un intérprete falso, sin modelo ni servidores; cada política tiene una prueba que la nombra |
+| `evaluacion/` | Casos propios y de prueba, en el formato de `mensajes_dev.jsonl`, con su interpretación correcta |
+| `evidencia/` | Resultados de la comparación y capturas de MLflow |
+| `tools/` | Evaluación, prueba de humo, generación de casos, revisión del flujo de Git y `verificar.py` |
+| `compose.yaml`, `Containerfile*` | La API, MLflow y su base PostgreSQL |
+| `DECISIONES.md` | Las decisiones técnicas y de producto, con sus alternativas |
+| `CLAUDE.md` | El contexto y las reglas para el agente de programación |
 
 ## Desarrollo local
 
