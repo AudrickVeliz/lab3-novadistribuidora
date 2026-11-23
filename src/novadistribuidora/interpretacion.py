@@ -34,7 +34,8 @@ class Mencion(BaseModel):
         default="venta",
         description=(
             "venta: fardo, caja, display o quintal, o sin unidad; "
-            "suelta: botellas, latas, bolsas, sobres o unidades; docena: docenas."
+            "suelta: botellas, latas, bolsas, sobres, unidades o libras de un producto de 1 lb "
+            "(media docena son 6 sueltas); docena: docenas enteras."
         ),
     )
     operacion: Operacion = Field(
