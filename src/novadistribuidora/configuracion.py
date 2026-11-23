@@ -8,12 +8,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MODELO_POR_OMISION = "anthropic/claude-haiku-5.5"
-MODELO_ALTERNO_POR_OMISION = "openai/gpt-6-luna"
+MODELO_POR_OMISION = "openai/gpt-6-luna"
+MODELO_ALTERNO_POR_OMISION = "anthropic/claude-haiku-5.5"
 CARPETA_DATOS_POR_OMISION = "datos"
 # En local; docker compose lo cambia por el nombre del servicio de MLflow.
 MLFLOW_POR_OMISION = "http://localhost:5000"
-# Haiku responde en 1 a 3 s; 10 s deja margen sin que un proveedor colgado frene el pedido.
+# GPT-6 Luna responde en 3 s (p99 de 7.7 s); 10 s corta ~1 % de llamadas y pasa al alterno (D-014).
 TIEMPO_LIMITE_POR_OMISION_S = 10.0
 
 

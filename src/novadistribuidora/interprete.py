@@ -21,9 +21,11 @@ from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.servicio import InterpreteNoDisponible
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
-# Un reintento cubre un error transitorio; más intentos solo alargan la espera del tendero.
-INTENTOS_DEL_PRINCIPAL = 2
 ETIQUETA = "mensajes_del_cliente"
+# Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
+VERSION_INSTRUCCIONES = "v3"
+# 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
+CACHE = {"type": "ephemeral"}
 
 INSTRUCCIONES = f"""\
 Eres el asistente de toma de pedidos de NovaDistribuidora, una distribuidora mayorista de \
@@ -39,10 +41,15 @@ todos los posibles y no elijas. Si la distribuidora no lo vende, una lista vací
 inventes un SKU.
 2. cantidad: el número que dice el cliente, aunque lo escriba en letras ("tres" es 3, "una \
 docena" es 1 con unidad docena). null si no dice cantidad.
-3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no dice la unidad; \
-"suelta" si habla de botellas, latas, bolsas, bolsitas, sobres o unidades; "docena" si habla \
-de docenas. Una palabra que es parte del nombre del producto no es la unidad: en "5 shampoo \
-brisa sobre 10 ml", "sobre" es parte del nombre y la unidad es "venta".
+3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no nombra ninguna \
+unidad, aunque el producto vaya en plural ("tres detergentes espumoso" son 3 de venta); \
+"suelta" solo si nombra botellas, latas, bolsas, bolsitas, sobres, unidades, o libras de un \
+producto de 1 lb ("50 libras de frijol" son 50 sueltas); "docena" si habla de docenas \
+enteras. Media docena son 6 sueltas y docena y media son 18 sueltas: no las conviertas a \
+fardos ni cajas, ni redondees. Si las docenas son de fardos, cajas o displays ("media docena \
+de fardos"), la unidad es "venta" con esa cantidad (6). Una palabra que es parte del nombre \
+del producto no es la unidad: en "5 shampoo brisa sobre 10 ml", "sobre" es parte del nombre \
+y la unidad es "venta".
 4. operacion: "agregar" por omisión; "corregir" si cambia la cantidad de algo que ya pidió \
 ("no, mejor que sean 5", "corrijo: son 8"), con la cantidad nueva; "quitar" si lo saca del \
 pedido ("sin las papitas", "quíteme la sal").
@@ -88,14 +95,16 @@ def formatear_mensajes(mensajes: Sequence[str]) -> str:
 
 
 def crear_cadena(principal: Runnable, alterno: Runnable, catalogo: str) -> Runnable:
-    """prompt | principal (con un reintento) y, si falla, el alterno."""
-    prompt = ChatPromptTemplate.from_messages(
-        [SystemMessage(content=INSTRUCCIONES + catalogo), ("human", "{mensajes}")]
+    """prompt | principal y, si falla, el alterno."""
+    # Instrucciones y catálogo son iguales en cada pedido: la marca deja que Anthropic los lea
+    # de su caché a 0.1x del precio; OpenAI guarda su caché sin marca (D-014).
+    sistema = SystemMessage(
+        content=[{"type": "text", "text": INSTRUCCIONES + catalogo, "cache_control": CACHE}]
     )
-    con_reintento = principal.with_retry(
-        stop_after_attempt=INTENTOS_DEL_PRINCIPAL, wait_exponential_jitter=False
-    )
-    return prompt | con_reintento.with_fallbacks([alterno])
+    prompt = ChatPromptTemplate.from_messages([sistema, ("human", "{mensajes}")])
+    # Sin reintento del principal: tras un corte de 10 s o un 429, el alterno responde en ~2 s
+    # y otro intento podría sumar otros 10 s (D-014).
+    return prompt | principal.with_fallbacks([alterno])
 
 
 def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:

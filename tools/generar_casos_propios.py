@@ -1,8 +1,8 @@
-"""Genera evaluacion/casos_propios.jsonl desde la interpretación correcta escrita a mano (D-012).
+"""Genera los casos propios desde su interpretación correcta escrita a mano (D-012, D-014).
 
 python tools/generar_casos_propios.py
 
-Cada caso de evaluacion/fuente_casos_propios.json trae el mensaje y su interpretación
+Cada caso de evaluacion/fuente_casos_<conjunto>.json trae el mensaje y su interpretación
 correcta; la respuesta esperada la calcula el motor de reglas, que reproduce los 84 casos
 publicados. El resultado tiene el formato de ejemplos/mensajes_dev.jsonl: id, tipo, entrada
 y esperado. Necesita los archivos publicados en datos/.
@@ -18,8 +18,14 @@ from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.motor import armar_pedido
 
 RAIZ = Path(__file__).resolve().parents[1]
-FUENTE = RAIZ / "evaluacion" / "fuente_casos_propios.json"
-CASOS = RAIZ / "evaluacion" / "casos_propios.jsonl"
+# propios: los 40 de D-012. prueba: los escritos antes de las instrucciones v2, que no los vieron.
+CONJUNTOS = {
+    conjunto: (
+        RAIZ / "evaluacion" / f"fuente_casos_{conjunto}.json",
+        RAIZ / "evaluacion" / f"casos_{conjunto}.jsonl",
+    )
+    for conjunto in ("propios", "prueba")
+}
 # Lo que la respuesta tiene y mensajes_dev.jsonl no compara: el eco del cliente y la plantilla.
 SIN_COMPARAR = ("cliente_id", "mensaje_cliente")
 
@@ -53,10 +59,11 @@ def generar(fuente: list[dict], datos: Datos) -> str:
 
 
 def main() -> None:
-    fuente = json.loads(FUENTE.read_text(encoding="utf-8"))
-    contenido = generar(fuente, cargar_datos(RAIZ / "datos"))
-    CASOS.write_bytes(contenido.encode("utf-8"))
-    print(f"{len(fuente)} casos en {CASOS.relative_to(RAIZ)}")
+    datos = cargar_datos(RAIZ / "datos")
+    for fuente, casos in CONJUNTOS.values():
+        contenido_fuente = json.loads(fuente.read_text(encoding="utf-8"))
+        casos.write_bytes(generar(contenido_fuente, datos).encode("utf-8"))
+        print(f"{len(contenido_fuente)} casos en {casos.relative_to(RAIZ)}")
 
 
 if __name__ == "__main__":
