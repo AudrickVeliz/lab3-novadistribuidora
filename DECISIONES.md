@@ -199,3 +199,51 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Responder 200 con un pedido vacío si el modelo falla | `requiere_revision` exige un motivo, y ninguno del contrato describe la falla |
 
 **Justificación:** cada caso del Anexo tiene una prueba en `tests/test_api.py`, y los 84 casos publicados pasan por HTTP con el intérprete ideal (`tests/test_api_casos_dev.py`).
+
+## D-009: intérprete con una cadena de LangChain y dos modelos de proveedores distintos
+
+**Fecha:** 2026-11-22
+
+**Contexto:** el requerimiento 1 deja al estudiante la arquitectura (agente, cadenas o una combinación), las herramientas y las instrucciones, y pide modelos de OpenRouter configurados en `.env`. La evaluación mide la calidad, la latencia y que ningún mensaje altere las condiciones. Audrick eligió la arquitectura y los modelos de desarrollo con los precios de OpenRouter consultados el 2026-11-22.
+
+**Decisión:**
+
+- **Arquitectura (elección de Audrick):** una cadena de una sola llamada, `prompt | modelo.with_structured_output(Interpretacion) .with_retry(2 intentos) .with_fallbacks([alterno])`.
+  - El mensaje de sistema lleva las reglas para *interpretar* y el catálogo completo: SKU, nombre, unidad de venta, unidades por empaque y alias, **sin precios**.
+  - El mensaje humano lleva los mensajes del cliente, numerados y delimitados como datos.
+- **Modelos (elección de Audrick):**
+  - principal, `anthropic/claude-haiku-5.5`; alterno, `openai/gpt-6-luna`. Cuestan US$0.10 y US$0.50 por millón de tokens de entrada y salida.
+  - Son de proveedores distintos: una caída de uno no se lleva al otro.
+  - La elección final se respalda en el paso 6 con la comparación en MLflow.
+- **Parámetros:**
+  - salida estructurada estricta (`json_schema`, `strict=True`);
+  - `provider.require_parameters` para que OpenRouter solo use proveedores que la respeten;
+  - sin `temperature`, porque estos modelos de razonamiento no la admiten;
+  - 10 s de tiempo límite por llamada.
+- **Configuración:** solo `OPENROUTER_API_KEY` es obligatoria. `MODELO`, `MODELO_ALTERNO`, `TIEMPO_LIMITE_MODELO_S` y `CARPETA_DATOS` toman por omisión los valores de `.env.example`, así que un `.env` con solo la clave levanta el servicio.
+- **Defensa ante inyección, en capas:**
+  1. Los mensajes del cliente se delimitan como datos y se quita la etiqueta si el cliente intenta cerrarla.
+  2. El esquema no tiene campos de precio ni de condiciones y rechaza campos extra (D-001).
+  3. Los SKU se validan contra el catálogo.
+  4. La confirmación no copia texto del cliente (D-007).
+
+**Alternativas:**
+
+| Alternativa | A favor | En contra |
+|---|---|---|
+| Cadena de una llamada con el catálogo en el prompt (elegida) | Una llamada por pedido: menor latencia y costo; predecible y fácil de probar | El prompt crece con el catálogo (hoy, 44 productos, unos 3,700 tokens por pedido) |
+| Agente con herramientas (buscar producto, ver historial) | Escala a catálogos grandes | Varias llamadas por pedido: más latencia, costo y puntos de falla para un problema acotado |
+| Recuperar solo los productos parecidos (embeddings) | Prompt más corto | Otro componente que puede fallar en silencio: si no recupera el producto correcto, el modelo no puede elegirlo |
+| Modelos más baratos (DeepSeek V4.1 Flash, Qwen 3.5 Flash) | Hasta 50 % menos | Se comparan en el paso 6; Haiku ya cuesta US$0.0005 por pedido |
+
+**Medición con los 84 casos publicados** (2026-11-22, prompt final). Cuenta como exacto un pedido que coincide en estado, líneas, total, fecha, sustituciones, pendientes (motivo y opciones) y motivos:
+
+| Modelo | Exactos | Latencia p50 / p95 | Costo por pedido |
+|---|---|---|---|
+| Claude Haiku 5.5 | 83/84 (98.8 %) | 1.30 s / 3.16 s | US$0.00049 |
+| GPT-6 Luna | 52 de 53 respondidos | 3.28 s / 4.88 s | US$0.00019 |
+
+- **GPT-6 Luna:** respondió 429 en 31 casos por el límite de solicitudes de una cuenta nueva de OpenRouter. El límite no es del modelo, pero es otra razón para que sea el alterno y no el principal.
+- **El caso que falla con ambos (D008):** "pasta" sin más debería ofrecer también la pasta dental, y los modelos solo listan las dos pastas alimenticias.
+- **Lo que no se ajustó:** el prompt no se forzó para ese caso. La evaluación usa mensajes no publicados, y ajustar las instrucciones a los 84 casos sería sobreajustarlas.
+- **Qué hizo subir el resultado de 81 a 83:** dos precisiones del prompt que corrigieron errores sistemáticos. "Sobre" puede ser parte del nombre del producto, y una mención ambigua no se une a otra más específica que venga después.
