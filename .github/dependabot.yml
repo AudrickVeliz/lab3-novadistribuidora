@@ -31,6 +31,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Python se queda en 3.12, como el entorno de desarrollo y CI; solo llegan los parches (D-013).
+      - dependency-name: library/python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     commit-message:
       prefix: chore
       include: scope
