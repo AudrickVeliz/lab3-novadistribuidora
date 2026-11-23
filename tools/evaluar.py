@@ -3,8 +3,9 @@
 python tools/evaluar.py                               # las alternativas de D-012, 3 corridas
 python tools/evaluar.py --alternativas haiku --corridas 1
 
-Cada caso (los 84 publicados y los 40 propios) pasa por el mismo camino que la API
-(Servicio.interpretar_pedido) y se califica con código (novadistribuidora.calificaciones).
+Cada caso (84 publicados, 40 propios de D-012 y 15 de prueba de D-014) pasa por el mismo
+camino que la API (Servicio.interpretar_pedido) y se califica con código
+(novadistribuidora.calificaciones).
 Cada corrida es un run del experimento "evaluacion" de MLflow, con sus trazas, tokens y costo.
 Escribe evidencia/comparacion.csv y evidencia/comparacion.md. Necesita .env con la clave, los
 archivos publicados y MLflow arriba (docker compose up).
@@ -30,6 +31,7 @@ from novadistribuidora.contrato import SolicitudInterpretar
 from novadistribuidora.datos import Datos, cargar_datos
 from novadistribuidora.interprete import (
     INSTRUCCIONES,
+    VERSION_INSTRUCCIONES,
     InterpreteLangChain,
     crear_cadena,
     crear_modelo,
@@ -42,6 +44,7 @@ ALTERNATIVAS = {"haiku": "anthropic/claude-haiku-5.5", "luna": "openai/gpt-6-lun
 CONJUNTOS = {
     "publicados": RAIZ / "ejemplos" / "mensajes_dev.jsonl",
     "propios": RAIZ / "evaluacion" / "casos_propios.jsonl",
+    "prueba": RAIZ / "evaluacion" / "casos_prueba.jsonl",
 }
 EXPERIMENTO = "evaluacion"
 EVIDENCIA = RAIZ / "evidencia"
@@ -122,16 +125,21 @@ def correr(
         for identificador, caso in casos.items()
     ]
     huella = hashlib.sha256(INSTRUCCIONES.encode("utf-8")).hexdigest()[:12]
-    with mlflow.start_run(run_name=f"{nombre} corrida {corrida}"):
+    with mlflow.start_run(run_name=f"{nombre} {VERSION_INSTRUCCIONES} corrida {corrida}"):
         mlflow.log_params(
             {"modelo": ALTERNATIVAS[nombre], "corrida": corrida, "prompt_sha256": huella}
         )
-        mlflow.set_tags({"alternativa": nombre, "casos": len(filas)})
+        mlflow.set_tags(
+            {"alternativa": nombre, "instrucciones": VERSION_INSTRUCCIONES, "casos": len(filas)}
+        )
         mlflow.genai.evaluate(data=filas, predict_fn=predecir, scorers=crear_calificadores(datos))
 
 
 def runs_guardados() -> list:
-    """Las corridas registradas, para regenerar la evidencia sin volver a llamar al modelo."""
+    """Las corridas registradas, para regenerar la evidencia sin volver a llamar al modelo.
+
+    Solo las que llevan la versión de las instrucciones (D-014): las de D-012 no la tienen y no
+    incluyen el conjunto de prueba, así que quedan en MLflow como historial."""
     experimento = mlflow.get_experiment_by_name(EXPERIMENTO)
     runs = mlflow.search_runs(
         [experimento.experiment_id],
@@ -139,8 +147,12 @@ def runs_guardados() -> list:
         output_format="list",
     )
     return sorted(
-        (run for run in runs if "alternativa" in run.data.tags),
-        key=lambda run: (run.data.tags["alternativa"], int(run.data.params["corrida"])),
+        (run for run in runs if "instrucciones" in run.data.tags),
+        key=lambda run: (
+            run.data.tags["alternativa"],
+            run.data.tags["instrucciones"],
+            int(run.data.params["corrida"]),
+        ),
     )
 
 
@@ -206,23 +218,27 @@ def _informe(filas: list[dict], casos: dict) -> str:
     lineas = [
         "# Comparación de alternativas del intérprete",
         "",
-        "Generado por `tools/evaluar.py` (D-012). Media ± desviación estándar entre corridas.",
+        "Generado por `tools/evaluar.py` (D-012, D-014). Media ± desviación estándar entre "
+        "corridas.",
         "",
-        "| Alternativa | Conjunto | Corridas | Exactos | Estado | Líneas | Pendientes | "
+        "| Alternativa | Instrucciones | Conjunto | Corridas | Exactos | Estado | Líneas | "
+        "Pendientes | "
         "Condiciones intactas | Errores | Latencia p50 (s) | Latencia p95 (s) | "
         "Costo por pedido (US$) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
-    grupos: dict[tuple[str, str], list[dict]] = {}
+    grupos: dict[tuple[str, str, str], list[dict]] = {}
     for fila in filas:
-        grupos.setdefault((fila["alternativa"], fila["conjunto"]), []).append(fila)
-    for (alternativa, conjunto), corridas in grupos.items():
+        clave = (fila["alternativa"], fila["instrucciones"], fila["conjunto"])
+        grupos.setdefault(clave, []).append(fila)
+    for (alternativa, instrucciones, conjunto), corridas in grupos.items():
 
         def valores(clave, corridas=corridas):
             return [corrida[clave] for corrida in corridas]
 
         lineas.append(
-            f"| {alternativa} | {conjunto} ({corridas[0]['casos']}) | {len(corridas)} "
+            f"| {alternativa} | {instrucciones} | {conjunto} ({corridas[0]['casos']}) "
+            f"| {len(corridas)} "
             f"| {_media(valores('exacto'), '.1%')} | {_media(valores('estado'), '.1%')} "
             f"| {_media(valores('lineas'), '.1%')} | {_media(valores('pendientes'), '.1%')} "
             f"| {_media(valores('condiciones_intactas'), '.0%')} "
@@ -231,16 +247,22 @@ def _informe(filas: list[dict], casos: dict) -> str:
             f"| {_media(valores('latencia_p95_s'), '.2f')} "
             f"| {_media(valores('costo_por_pedido_usd'), '.5f')} |"
         )
-    lineas += ["", "## Casos fallidos", "", "| Alternativa | Caso | Tipo | Corridas fallidas |"]
-    lineas.append("|---|---|---|---|")
-    for (alternativa, _), corridas in grupos.items():
+    lineas += [
+        "",
+        "## Casos fallidos",
+        "",
+        "| Alternativa | Instrucciones | Caso | Tipo | Corridas fallidas |",
+        "|---|---|---|---|---|",
+    ]
+    for (alternativa, instrucciones, _), corridas in grupos.items():
         fallos: dict[str, int] = {}
         for corrida in corridas:
             for caso in corrida["fallidos"]:
                 fallos[caso] = fallos.get(caso, 0) + 1
         for caso, veces in sorted(fallos.items()):
             lineas.append(
-                f"| {alternativa} | {caso} | {casos[caso]['tipo']} | {veces} de {len(corridas)} |"
+                f"| {alternativa} | {instrucciones} | {caso} | {casos[caso]['tipo']} "
+                f"| {veces} de {len(corridas)} |"
             )
     return "\n".join(lineas) + "\n"
 
@@ -277,11 +299,19 @@ def main() -> None:
     filas = []
     for run in runs_guardados():
         nombre, corrida = run.data.tags["alternativa"], int(run.data.params["corrida"])
+        instrucciones = run.data.tags["instrucciones"]
         for resumen in resumir_corrida(run, casos, datos):
-            filas.append({"alternativa": nombre, "corrida": corrida, "run_id": run.info.run_id})
+            filas.append(
+                {
+                    "alternativa": nombre,
+                    "instrucciones": instrucciones,
+                    "corrida": corrida,
+                    "run_id": run.info.run_id,
+                }
+            )
             filas[-1] |= resumen
             print(
-                f"{nombre} corrida {corrida} {resumen['conjunto']}: "
+                f"{nombre} {instrucciones} corrida {corrida} {resumen['conjunto']}: "
                 f"{resumen['exacto']:.1%} exactos, {resumen['errores']} errores",
                 flush=True,
             )

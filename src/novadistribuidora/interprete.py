@@ -24,6 +24,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 # Un reintento cubre un error transitorio; más intentos solo alargan la espera del tendero.
 INTENTOS_DEL_PRINCIPAL = 2
 ETIQUETA = "mensajes_del_cliente"
+# Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
+VERSION_INSTRUCCIONES = "v1"
 
 INSTRUCCIONES = f"""\
 Eres el asistente de toma de pedidos de NovaDistribuidora, una distribuidora mayorista de \
