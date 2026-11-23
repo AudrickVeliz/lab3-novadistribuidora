@@ -38,7 +38,7 @@ addopts = "--basetemp=.pytest_tmp"
 line-length = 100
 target-version = "py312"
 # Módulos propios para ordenar los imports, igual que pythonpath en pytest.
-src = ["src", "tools"]
+src = ["src", "tools", "tests"]
 
 [tool.ruff.lint]
 # Errores, imports, bugs probables, sintaxis moderna, seguridad (bandit), simplificaciones,
