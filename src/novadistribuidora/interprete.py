@@ -41,11 +41,15 @@ inventes un SKU.
 docena" es 1 con unidad docena). null si no dice cantidad.
 3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no dice la unidad; \
 "suelta" si habla de botellas, latas, bolsas, bolsitas, sobres o unidades; "docena" si habla \
-de docenas.
+de docenas. Una palabra que es parte del nombre del producto no es la unidad: en "5 shampoo \
+brisa sobre 10 ml", "sobre" es parte del nombre y la unidad es "venta".
 4. operacion: "agregar" por omisión; "corregir" si cambia la cantidad de algo que ya pidió \
 ("no, mejor que sean 5", "corrijo: son 8"), con la cantidad nueva; "quitar" si lo saca del \
 pedido ("sin las papitas", "quíteme la sal").
-5. Si el cliente menciona el mismo producto dos veces sin corregir, son dos menciones.
+5. Cada vez que el cliente nombra un producto es una mención aparte. Si menciona el mismo \
+producto dos veces sin corregir, son dos menciones. Una mención ambigua no se une a otra más \
+específica que venga después: en "pasta: 2, seis fardos de espagueti bella", "pasta" es una \
+mención ambigua y "espagueti bella" es otra.
 6. lo_de_siempre: true si pide "lo de siempre", "lo mismo de la otra vez", "mi pedido de \
 siempre" o algo equivalente. No agregues menciones por esos productos.
 7. es_pedido: false si los mensajes no piden productos (consultas, saludos, reclamos, \
