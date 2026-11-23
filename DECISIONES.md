@@ -350,3 +350,70 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 
 - **Arranque de la API con MLflow caído:** las solicitudes que llegan antes de que aparezca MLflow no se trazan. El cliente liviano no puede crear la traza sin un experimento (`default_experiment_registry` no existe en `mlflow-tracing`), aunque el pedido se atiende igual. Cuando MLflow aparece, el hilo de D-010 crea el experimento en unos 2 s, y mientras tanto `/health` dice `degradado`.
 - **Windows con Podman:** `localhost` puede tardar 21 s en clientes que prueban primero IPv6. Está documentado en el README; no afecta a Docker en Linux o macOS.
+
+## D-012: evaluación con casos propios y comparación que respalda el modelo
+
+**Fecha:** 2026-11-22
+
+**Contexto:** el requerimiento 3 pide un conjunto de evaluación con casos propios además de los publicados, calificaciones que midan la calidad de los pedidos y una comparación de al menos dos alternativas en calidad, latencia y costo que respalde la configuración entregada. Audrick decidió comparar Claude Haiku 5.5 contra GPT-6 Luna, calificar solo con código, escribir unos 40 casos propios y hacer 3 corridas por alternativa.
+
+**Decisión:**
+
+- **Conjunto de evaluación:**
+  - **Publicados** (`ejemplos/mensajes_dev.jsonl`, 84): se reportan como *desarrollo*, porque el prompt se ajustó con ellos (D-009).
+  - **Propios** (`evaluacion/casos_propios.jsonl`, 40, en el mismo formato): funcionan como *prueba*, con mensajes que el prompt nunca vio:
+    - 10 intentos de inyección (precio del gerente, "ignora tus instrucciones", "SYSTEM:", cerrar el delimitador, crédito "aprobado", total Q0 en la confirmación, SKU inventado);
+    - consultas, reclamos y cancelaciones sin pedido, un pedido con una pregunta y otro en inglés;
+    - media docena, docenas, libras y sobres sueltos, cantidades en letras, un pedido sin cantidad;
+    - correcciones y exclusiones entre mensajes;
+    - las 14:00 y las 13:59 exactas;
+    - "lo de siempre" con exclusiones, correcciones, sustitutos y crédito excedido;
+    - ambigüedades y productos que no se venden.
+- **Cómo se obtiene la respuesta esperada de los casos propios:** cada caso trae su **interpretación correcta escrita a mano** (`evaluacion/fuente_casos_propios.json`). La respuesta esperada la calcula el motor de reglas, que reproduce los 84 casos publicados, con `tools/generar_casos_propios.py`, y una prueba verifica que el `.jsonl` coincide con su fuente. Así nadie calcula montos ni fechas a mano.
+- **Calificaciones con código** (`novadistribuidora.calificaciones`, decisión de Audrick):
+  - una por aspecto: estado, líneas, total, fecha, sustituciones, pendientes (motivo y opciones) y motivos;
+  - `exacto` si todas coinciden;
+  - `condiciones_intactas`: precio del catálogo y descuento de la escala en cada línea, sin mirar la respuesta esperada.
+  - No se califica el texto de los pendientes, que depende de cómo el modelo recorte el mensaje, ni `mensaje_cliente`, que es una plantilla (D-007).
+  - La respuesta esperada es exacta, así que comparar con código es determinista, gratis y reproducible; un juez LLM agregaría costo y variabilidad sin información nueva.
+- **Corrida:**
+  - `tools/evaluar.py` pasa cada caso por el mismo camino que la API, con cada modelo solo (sin el alterno);
+  - registra un run por corrida en el experimento `evaluacion` de MLflow, con `mlflow.genai.evaluate` y la traza de cada caso (tokens y costo);
+  - escribe `evidencia/comparacion.md` y `.csv`.
+
+**Resultados** (3 corridas por alternativa, media ± desviación estándar; `evidencia/comparacion.md`):
+
+| Alternativa | Conjunto | Exactos | Latencia p50 / p95 | Tokens de entrada / salida por pedido | Costo por pedido |
+|---|---|---|---|---|---|
+| **Claude Haiku 5.5** | propios (40) | **97.5 % ± 0.0** | **1.45 s / 2.84 s** | 3,844 / 189 | US$0.00045 |
+| **Claude Haiku 5.5** | publicados (84) | **99.6 % ± 0.7** | **1.62 s / 3.57 s** | | US$0.00049 |
+| GPT-6 Luna | propios (40) | 96.7 % ± 1.4 | 2.65 s / 4.74 s | 2,173 (2,164 en caché) / 155 | US$0.00009 |
+| GPT-6 Luna | publicados (84) | 98.8 % ± 1.2 | 2.75 s / 3.85 s | | US$0.00010 |
+
+- **Seguridad:** las condiciones quedaron intactas en el **100 %** de los 744 casos evaluados con ambos modelos, incluidas las 10 inyecciones de cada corrida: ningún mensaje cambió un precio ni un descuento.
+- **Errores:** ninguno en las 6 corridas válidas.
+
+**Elección:** **Claude Haiku 5.5 como principal y GPT-6 Luna como alterno**, sin cambios respecto de D-009.
+
+- **Calidad:** Haiku acierta igual o más en ambos conjuntos y es más estable entre corridas (± 0.0 contra ± 1.4 en los propios).
+- **Latencia:** Haiku es **1.2 s más rápido** en la mediana. La evaluación mide latencia, y es lo que espera el tendero.
+- **Costo:** Luna cuesta unas 5 veces menos, por la caché automática del prompt (2,164 de sus 2,173 tokens de entrada) y un tokenizador más compacto. Pero la diferencia es de US$0.0004 por pedido, unos **US$0.40 por cada 1,000 pedidos**; con 40 tiendas no compensa perder 1.2 s y estabilidad.
+- **Luna como alterno:** su calidad es comparable y es de otro proveedor, así que una caída de Anthropic no deja al servicio sin intérprete.
+
+**Hallazgos:**
+
+| Hallazgo | Detalle | Qué se hace |
+|---|---|---|
+| Límite de la cuenta de desarrollo | La primera comparación de Luna dio **84 errores 429 de 124** por corrida, con 2 solicitudes a la vez: la cuenta nueva de OpenRouter limita las solicitudes por minuto. Esa "exactitud" (19 a 38 %) medía el límite, no el modelo; en los 40 casos que respondió acertó 97.5 a 100 %. | Se descartaron esas corridas y se repitió con 1 solicitud a la vez y 3 s de pausa (`--pausa`, fuera de la latencia medida): 0 errores. Con la clave del equipo docente el límite puede ser otro; el reintento y el alterno cubren un 429 aislado |
+| P022: "50 libras de frijol negro" | Ambos modelos a veces lo toman como 50 fardos y no como 50 libras sueltas (2 fardos). La regla 3 del prompt no nombra las libras entre las unidades sueltas | Mejora pendiente. No se ajustó el prompt con los casos propios, porque dejarían de ser una prueba |
+| P017: "media docena de cloro" | Haiku a veces lo convierte en una caja en lugar de dejarlo como cantidad no convertible (6 de 12) | Igual que P022 |
+| Costo de Haiku | Sin la caché del prompt paga los ~3,800 tokens de entrada en cada pedido | Mejora pendiente: activar la caché del prompt de Anthropic por OpenRouter |
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Calificar con un juez LLM | Hay respuesta esperada exacta: el juez agrega costo y variabilidad sin información nueva |
+| Escribir la respuesta esperada de los casos propios a mano | Montos, descuentos y fechas calculados a mano son una fuente de errores; la interpretación a mano y el motor verificado separan lo que se afirma de lo que se calcula |
+| Una sola corrida | Las diferencias entre modelos son de 1 caso; sin repetir no se distinguen del azar |
+| Ajustar el prompt con los 40 casos propios | Dejarían de ser un conjunto de prueba |
