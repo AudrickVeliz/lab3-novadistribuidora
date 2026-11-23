@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import statistics
+import time
 from pathlib import Path
 
 import mlflow
@@ -95,15 +96,23 @@ def crear_servicio(modelo: str, configuracion: Configuracion, datos: Datos) -> S
     return Servicio(datos, interprete)
 
 
-def correr(nombre: str, corrida: int, servicio: Servicio, datos: Datos, casos: dict) -> None:
+def correr(
+    nombre: str, corrida: int, servicio: Servicio, datos: Datos, casos: dict, pausa_s: float
+) -> None:
     # Raíz de cada traza: el caso, la solicitud y la respuesta del contrato; dentro, LangChain.
     @mlflow.trace(name="interpretar_pedido", span_type=SpanType.CHAIN)
-    def predecir(caso: str, solicitud: dict) -> dict:
+    def interpretar(caso: str, solicitud: dict) -> dict:
         try:
             respuesta = servicio.interpretar_pedido(SolicitudInterpretar.model_validate(solicitud))
         except InterpreteNoDisponible as error:
             return {"error": str(error)}
         return respuesta.model_dump(mode="json")
+
+    def predecir(caso: str, solicitud: dict) -> dict:
+        # La pausa respeta el límite de solicitudes por minuto de la cuenta y queda fuera de la
+        # traza: no se suma a la latencia medida.
+        time.sleep(pausa_s)
+        return interpretar(caso, solicitud)
 
     filas = [
         {
@@ -242,6 +251,8 @@ def main() -> None:
     parser.add_argument("--corridas", type=int, default=3)
     # La cuenta de OpenRouter de desarrollo es nueva: con más concurrencia, GPT-6 Luna da 429.
     parser.add_argument("--hilos", type=int, default=2)
+    # Con GPT-6 Luna en esa cuenta: --hilos 1 --pausa 3 (D-012). La pausa no cuenta en la latencia.
+    parser.add_argument("--pausa", type=float, default=0.0, help="segundos antes de cada caso")
     # 127.0.0.1 y no localhost: en Windows con Podman, ::1 no responde y Python espera 21 s.
     parser.add_argument("--mlflow", default="http://127.0.0.1:5000")
     parser.add_argument(
@@ -262,7 +273,7 @@ def main() -> None:
         for nombre in argumentos.alternativas:
             servicio = crear_servicio(ALTERNATIVAS[nombre], configuracion, datos)
             for corrida in range(1, argumentos.corridas + 1):
-                correr(nombre, corrida, servicio, datos, casos)
+                correr(nombre, corrida, servicio, datos, casos, argumentos.pausa)
     filas = []
     for run in runs_guardados():
         nombre, corrida = run.data.tags["alternativa"], int(run.data.params["corrida"])
