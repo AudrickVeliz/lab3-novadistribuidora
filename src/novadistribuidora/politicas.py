@@ -79,6 +79,41 @@ def acumular_cantidad(cantidades: Cantidades, sku: str, cantidad: int, corrige: 
     return nuevas
 
 
+def descartar_cantidades_corregidas(pendientes: Sequence[Pendiente], sku: str) -> list[Pendiente]:
+    """§2: vale la corrección; la cantidad que el producto no pudo convertir antes ya no cuenta."""
+    corregido = (Motivo.CANTIDAD_NO_CONVERTIBLE, (sku,))
+    return [p for p in pendientes if (p.motivo, p.opciones) != corregido]
+
+
+def descartar_dudas_aclaradas(
+    pendientes: Sequence[Pendiente], mencion: Mencion, sku: str
+) -> list[Pendiente]:
+    """§2: vale la corrección; "perdón, mejor 3 del dorado" aclara cuál aceite quería.
+
+    Sin cantidad, la duda queda: la mención ambigua no conserva la suya y usar 1 sería adivinar.
+    """
+    if mencion.cantidad is None:
+        return list(pendientes)
+    return [
+        p for p in pendientes if not (p.motivo == Motivo.PRODUCTO_AMBIGUO and sku in p.opciones)
+    ]
+
+
+def agregar_pendiente_corregido(
+    pendientes: Sequence[Pendiente], pendiente: Pendiente
+) -> list[Pendiente]:
+    """§2: vale la corrección; si repite la duda de la mención anterior, el asesor la ve una vez."""
+    if any(_misma_duda(anterior, pendiente) for anterior in pendientes):
+        return list(pendientes)
+    return [*pendientes, pendiente]
+
+
+def _misma_duda(anterior: Pendiente, nuevo: Pendiente) -> bool:
+    # Las opciones identifican la duda; sin opciones (producto inexistente), solo queda el texto.
+    misma_duda = (anterior.motivo, anterior.opciones) == (nuevo.motivo, nuevo.opciones)
+    return misma_duda and (bool(nuevo.opciones) or anterior.texto == nuevo.texto)
+
+
 def quitar_producto(cantidades: Cantidades, sku: str) -> Cantidades:
     """§2: "pero sin las papalinas" elimina la línea."""
     return {actual: cantidad for actual, cantidad in cantidades.items() if actual != sku}

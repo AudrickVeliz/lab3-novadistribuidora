@@ -18,7 +18,9 @@ import json
 import os
 import statistics
 import time
+from collections import Counter
 from pathlib import Path
+from typing import NamedTuple
 
 import mlflow
 from dotenv import load_dotenv
@@ -26,7 +28,7 @@ from mlflow.entities import SpanType
 from mlflow.genai.scorers import scorer
 
 from novadistribuidora.calificaciones import calificar, condiciones_intactas
-from novadistribuidora.configuracion import Configuracion
+from novadistribuidora.configuracion import SIN_ESFUERZO, Configuracion, Esfuerzo
 from novadistribuidora.contrato import SolicitudInterpretar
 from novadistribuidora.datos import Datos, cargar_datos
 from novadistribuidora.interprete import (
@@ -40,7 +42,21 @@ from novadistribuidora.interprete import (
 from novadistribuidora.servicio import InterpreteNoDisponible, Servicio
 
 RAIZ = Path(__file__).resolve().parents[1]
-ALTERNATIVAS = {"haiku": "anthropic/claude-haiku-5.5", "luna": "openai/gpt-6-luna"}
+
+
+class Alternativa(NamedTuple):
+    modelo: str
+    esfuerzo: Esfuerzo | None = None
+
+
+HAIKU, LUNA = "anthropic/claude-haiku-5.5", "openai/gpt-6-luna"
+# Sin esfuerzo, el del proveedor; los nombres de v1 a v3 se conservan para comparar (D-017).
+ALTERNATIVAS = {
+    "haiku": Alternativa(HAIKU),
+    "luna": Alternativa(LUNA),
+    "luna-low": Alternativa(LUNA, "low"),
+    "luna-minimal": Alternativa(LUNA, "minimal"),
+}
 CONJUNTOS = {
     "publicados": RAIZ / "ejemplos" / "mensajes_dev.jsonl",
     "propios": RAIZ / "evaluacion" / "casos_propios.jsonl",
@@ -58,6 +74,8 @@ ASPECTOS = (
     "pendientes",
     "motivos",
 )
+# Listas de casos por corrida: en el CSV van al final, separadas por espacios.
+LISTAS = ("confirmados_con_error", "fallidos")
 
 
 def cargar_casos() -> dict[str, dict]:
@@ -91,11 +109,14 @@ def crear_calificadores(datos: Datos) -> list:
     ]
 
 
-def crear_servicio(modelo: str, configuracion: Configuracion, datos: Datos) -> Servicio:
+def crear_servicio(
+    alternativa: Alternativa, configuracion: Configuracion, datos: Datos
+) -> Servicio:
     """El modelo solo, sin alterno de otro proveedor: se mide cada alternativa por sí misma."""
-    estructurado = crear_modelo(modelo, configuracion)
+    estructurado = crear_modelo(alternativa.modelo, configuracion, alternativa.esfuerzo)
     catalogo = describir_catalogo(datos.productos, datos.sinonimos)
-    interprete = InterpreteLangChain(crear_cadena(estructurado, estructurado, catalogo), [modelo])
+    cadena = crear_cadena(estructurado, estructurado, catalogo)
+    interprete = InterpreteLangChain(cadena, [alternativa.modelo])
     return Servicio(datos, interprete)
 
 
@@ -127,7 +148,12 @@ def correr(
     huella = hashlib.sha256(INSTRUCCIONES.encode("utf-8")).hexdigest()[:12]
     with mlflow.start_run(run_name=f"{nombre} {VERSION_INSTRUCCIONES} corrida {corrida}"):
         mlflow.log_params(
-            {"modelo": ALTERNATIVAS[nombre], "corrida": corrida, "prompt_sha256": huella}
+            {
+                "modelo": ALTERNATIVAS[nombre].modelo,
+                "esfuerzo": ALTERNATIVAS[nombre].esfuerzo or SIN_ESFUERZO,
+                "corrida": corrida,
+                "prompt_sha256": huella,
+            }
         )
         mlflow.set_tags(
             {"alternativa": nombre, "instrucciones": VERSION_INSTRUCCIONES, "casos": len(filas)}
@@ -172,6 +198,7 @@ def resumir_corrida(run, casos: dict, datos: Datos) -> list[dict]:
                 "tipo": caso["tipo"],
                 "calificaciones": calificar(respuesta, caso["esperado"]),
                 "error": respuesta is None,
+                "confirmado": respuesta is not None and respuesta["estado"] == "confirmado",
                 "intactas": respuesta is None
                 or condiciones_intactas(respuesta, datos.productos, datos.escalas),
                 "latencia_s": traza.execution_duration / 1000,
@@ -191,6 +218,12 @@ def _resumen(conjunto: str, filas: list[dict]) -> dict:
         "latencia_p50_s": statistics.median(latencias),
         "latencia_p95_s": latencias[max(0, round(0.95 * len(latencias)) - 1)],
         "costo_por_pedido_usd": sum(fila["costo"] for fila in filas) / len(filas),
+        # Un fallo confirmado llega al tendero sin que nadie lo revise (D-014).
+        "confirmados_con_error": sorted(
+            fila["caso"]
+            for fila in filas
+            if fila["confirmado"] and not fila["calificaciones"]["exacto"]
+        ),
         "fallidos": sorted(fila["caso"] for fila in filas if not fila["calificaciones"]["exacto"]),
     }
     for aspecto in ASPECTOS:
@@ -200,11 +233,11 @@ def _resumen(conjunto: str, filas: list[dict]) -> dict:
 
 def escribir_evidencia(filas: list[dict], casos: dict) -> None:
     EVIDENCIA.mkdir(exist_ok=True)
-    columnas = [c for c in filas[0] if c != "fallidos"] + ["fallidos"]
+    columnas = [c for c in filas[0] if c not in LISTAS] + list(LISTAS)
     with (EVIDENCIA / "comparacion.csv").open("w", encoding="utf-8", newline="\n") as archivo:
         escritor = csv.DictWriter(archivo, fieldnames=columnas, lineterminator="\n")
         escritor.writeheader()
-        escritor.writerows(fila | {"fallidos": " ".join(fila["fallidos"])} for fila in filas)
+        escritor.writerows(fila | {c: " ".join(fila[c]) for c in LISTAS} for fila in filas)
     (EVIDENCIA / "comparacion.md").write_bytes(_informe(filas, casos).encode("utf-8"))
 
 
@@ -223,9 +256,9 @@ def _informe(filas: list[dict], casos: dict) -> str:
         "",
         "| Alternativa | Instrucciones | Conjunto | Corridas | Exactos | Estado | Líneas | "
         "Pendientes | "
-        "Condiciones intactas | Errores | Latencia p50 (s) | Latencia p95 (s) | "
-        "Costo por pedido (US$) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "Condiciones intactas | Confirmados con error | Errores | Latencia p50 (s) | "
+        "Latencia p95 (s) | Costo por pedido (US$) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     grupos: dict[tuple[str, str, str], list[dict]] = {}
     for fila in filas:
@@ -242,6 +275,7 @@ def _informe(filas: list[dict], casos: dict) -> str:
             f"| {_media(valores('exacto'), '.1%')} | {_media(valores('estado'), '.1%')} "
             f"| {_media(valores('lineas'), '.1%')} | {_media(valores('pendientes'), '.1%')} "
             f"| {_media(valores('condiciones_intactas'), '.0%')} "
+            f"| {_media([len(v) for v in valores('confirmados_con_error')], '.1f')} "
             f"| {_media(valores('errores'), '.1f')} "
             f"| {_media(valores('latencia_p50_s'), '.2f')} "
             f"| {_media(valores('latencia_p95_s'), '.2f')} "
@@ -251,18 +285,16 @@ def _informe(filas: list[dict], casos: dict) -> str:
         "",
         "## Casos fallidos",
         "",
-        "| Alternativa | Instrucciones | Caso | Tipo | Corridas fallidas |",
-        "|---|---|---|---|---|",
+        "| Alternativa | Instrucciones | Caso | Tipo | Corridas fallidas | Salió confirmado |",
+        "|---|---|---|---|---|---|",
     ]
     for (alternativa, instrucciones, _), corridas in grupos.items():
-        fallos: dict[str, int] = {}
-        for corrida in corridas:
-            for caso in corrida["fallidos"]:
-                fallos[caso] = fallos.get(caso, 0) + 1
+        fallos = Counter(caso for corrida in corridas for caso in corrida["fallidos"])
+        confirmados = Counter(c for corrida in corridas for c in corrida["confirmados_con_error"])
         for caso, veces in sorted(fallos.items()):
             lineas.append(
                 f"| {alternativa} | {instrucciones} | {caso} | {casos[caso]['tipo']} "
-                f"| {veces} de {len(corridas)} |"
+                f"| {veces} de {len(corridas)} | {confirmados[caso]} de {len(corridas)} |"
             )
     return "\n".join(lineas) + "\n"
 

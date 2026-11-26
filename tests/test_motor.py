@@ -99,6 +99,91 @@ def test_motor_una_correccion_reemplaza_y_otra_mencion_suma(datos, cliente):
     assert [(linea.sku, linea.cantidad) for linea in pedido.lineas] == [("B01", 6)]
 
 
+def test_motor_una_correccion_vale_aunque_la_cantidad_anterior_no_se_pudiera_convertir(
+    datos, cliente
+):
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="fardo y medio de kola 600", skus=["B01"], cantidad=1.5),
+        Mencion(texto="no, mejor que sean 2", skus=["B01"], cantidad=2, operacion="corregir"),
+    )
+
+    assert [(linea.sku, linea.cantidad) for linea in pedido.lineas] == [("B01", 2)]
+    assert pedido.pendientes == ()
+    assert pedido.estado == Estado.CONFIRMADO
+
+
+def test_motor_una_correccion_no_convertible_quita_la_cantidad_anterior(datos, cliente):
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="3 fardos de kola 600", skus=["B01"], cantidad=3),
+        Mencion(
+            texto="no, mejor 36 botellas",
+            skus=["B01"],
+            cantidad=36,
+            unidad="suelta",
+            operacion="corregir",
+        ),
+    )
+
+    assert pedido.lineas == ()
+    assert pedido.pendientes == (
+        Pendiente(Motivo.CANTIDAD_NO_CONVERTIBLE, "no, mejor 36 botellas", ("B01",)),
+    )
+    assert pedido.estado == Estado.REQUIERE_REVISION
+
+
+def test_motor_una_correccion_de_un_producto_ambiguo_deja_un_solo_pendiente(datos, cliente):
+    aceite = Pendiente(Motivo.PRODUCTO_AMBIGUO, "aceite", ("A06", "A07"))
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=0.5),
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=1, operacion="corregir"),
+    )
+
+    assert pedido.pendientes == (aceite,)
+
+
+def test_motor_una_correccion_que_aclara_el_producto_confirma_el_pedido(datos, cliente):
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=2),
+        Mencion(texto="del dorado", skus=["A06"], cantidad=3, operacion="corregir"),
+    )
+
+    assert [(linea.sku, linea.cantidad) for linea in pedido.lineas] == [("A06", 3)]
+    assert pedido.pendientes == ()
+    assert pedido.estado == Estado.CONFIRMADO
+
+
+def test_motor_dos_menciones_ambiguas_sin_corregir_dejan_dos_pendientes(datos, cliente):
+    # Sin corrección son dos pedidos del cliente; el asesor resuelve cada uno.
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=2),
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=3),
+    )
+
+    assert len(pedido.pendientes) == 2
+
+
+def test_motor_una_mencion_especifica_sin_corregir_no_aclara_la_duda(datos, cliente):
+    # Como D008, "pasta: 2, seis fardos de espagueti bella": la duda de "pasta" queda.
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="naranjitas", skus=["B04", "B05"], cantidad=2),
+        Mencion(texto="naranjita 1.5", skus=["B05"], cantidad=6),
+    )
+
+    assert [pendiente.motivo for pendiente in pedido.pendientes] == [Motivo.PRODUCTO_AMBIGUO]
+
+
 def test_motor_credito_excedido_calcula_las_lineas_igual(datos, cliente):
     # 60 fardos × Q120 con 5 % = Q6,840; con Q1,200 de saldo supera el límite de Q8,000.
     pedido = _pedido(datos, cliente, Mencion(texto="60 kola 600", skus=["B01"], cantidad=60))
