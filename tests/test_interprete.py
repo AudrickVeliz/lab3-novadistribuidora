@@ -194,16 +194,32 @@ def test_el_esfuerzo_de_razonamiento_se_pide_a_openrouter():
     }
 
 
-def test_crear_interprete_con_openrouter_no_llama_a_la_red(datos):
-    configuracion = Configuracion(
-        openrouter_api_key="clave-de-prueba",
-        modelo="openai/gpt-6-luna",
-        modelo_alterno="anthropic/claude-haiku-5.5",
-        carpeta_datos=Path("datos"),
-        tiempo_limite_s=5,
-        mlflow_tracking_uri="http://localhost:5000",
-    )
+CONFIGURACION = Configuracion(
+    openrouter_api_key="clave-de-prueba",
+    modelo="openai/gpt-6-luna",
+    esfuerzo="minimal",
+    modelo_alterno="anthropic/claude-haiku-5.5",
+    carpeta_datos=Path("datos"),
+    tiempo_limite_s=5,
+    mlflow_tracking_uri="http://localhost:5000",
+)
 
-    interprete = crear_interprete(configuracion, datos)
+
+def test_crear_interprete_con_openrouter_no_llama_a_la_red(datos):
+    interprete = crear_interprete(CONFIGURACION, datos)
 
     assert isinstance(interprete, InterpreteLangChain)
+
+
+def test_el_esfuerzo_configurado_es_solo_del_principal(datos, monkeypatch):
+    pedidos = []
+
+    def crear_modelo_falso(nombre, configuracion, esfuerzo=None):
+        pedidos.append((nombre, esfuerzo))
+        return RunnableLambda(lambda _: PEDIDO)
+
+    monkeypatch.setattr("novadistribuidora.interprete.crear_modelo", crear_modelo_falso)
+
+    crear_interprete(CONFIGURACION, datos)
+
+    assert pedidos == [("openai/gpt-6-luna", "minimal"), ("anthropic/claude-haiku-5.5", None)]

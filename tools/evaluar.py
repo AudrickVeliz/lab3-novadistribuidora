@@ -28,13 +28,12 @@ from mlflow.entities import SpanType
 from mlflow.genai.scorers import scorer
 
 from novadistribuidora.calificaciones import calificar, condiciones_intactas
-from novadistribuidora.configuracion import Configuracion
+from novadistribuidora.configuracion import SIN_ESFUERZO, Configuracion, Esfuerzo
 from novadistribuidora.contrato import SolicitudInterpretar
 from novadistribuidora.datos import Datos, cargar_datos
 from novadistribuidora.interprete import (
     INSTRUCCIONES,
     VERSION_INSTRUCCIONES,
-    Esfuerzo,
     InterpreteLangChain,
     crear_cadena,
     crear_modelo,
@@ -151,7 +150,7 @@ def correr(
         mlflow.log_params(
             {
                 "modelo": ALTERNATIVAS[nombre].modelo,
-                "esfuerzo": ALTERNATIVAS[nombre].esfuerzo or "proveedor",
+                "esfuerzo": ALTERNATIVAS[nombre].esfuerzo or SIN_ESFUERZO,
                 "corrida": corrida,
                 "prompt_sha256": huella,
             }

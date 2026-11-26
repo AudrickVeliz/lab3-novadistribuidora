@@ -10,7 +10,7 @@ import contextvars
 import re
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -18,7 +18,7 @@ from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from novadistribuidora.configuracion import Configuracion
+from novadistribuidora.configuracion import Configuracion, Esfuerzo
 from novadistribuidora.datos import Datos, Producto
 from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.servicio import InterpreteNoDisponible
@@ -27,8 +27,6 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
 VERSION_INSTRUCCIONES = "v4"
-# Esfuerzo de razonamiento que se compara en la evaluación (D-017); sin él, el del proveedor.
-Esfuerzo = Literal["low", "minimal"]
 # 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
 CACHE = {"type": "ephemeral"}
 
@@ -188,7 +186,8 @@ class InterpreteLangChain:
 
 def crear_interprete(configuracion: Configuracion, datos: Datos) -> InterpreteLangChain:
     cadena = crear_cadena(
-        crear_modelo(configuracion.modelo, configuracion),
+        # El esfuerzo es del principal: el alterno, de otro proveedor, responde con el suyo.
+        crear_modelo(configuracion.modelo, configuracion, configuracion.esfuerzo),
         crear_modelo(configuracion.modelo_alterno, configuracion),
         describir_catalogo(datos.productos, datos.sinonimos),
     )

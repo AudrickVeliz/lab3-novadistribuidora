@@ -71,6 +71,7 @@ curl -X POST http://localhost:8000/v1/pedidos/interpretar \
 |---|---|---|
 | `OPENROUTER_API_KEY` | Clave de OpenRouter | (obligatoria) |
 | `MODELO` | Modelo que interpreta los mensajes | `openai/gpt-6-luna` |
+| `ESFUERZO_MODELO` | Esfuerzo de razonamiento del principal: `minimal`, `low` o `proveedor` (el del modelo) | `minimal` |
 | `MODELO_ALTERNO` | Modelo que responde si el principal falla | `anthropic/claude-haiku-5.5` |
 | `TIEMPO_LIMITE_MODELO_S` | Segundos máximos por llamada al modelo | `10` |
 | `CARPETA_DATOS` | Carpeta de los parquet publicados | `datos` (en el compose, `/datos`) |
