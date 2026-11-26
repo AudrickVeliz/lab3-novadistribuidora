@@ -130,22 +130,26 @@ regenera los `.jsonl`.
 
 ## Resultados
 
-Configuración entregada: **GPT-6 Luna** como principal y **Claude Haiku 5.5** como alterno, con
-las instrucciones v3 (D-014). Media de 3 corridas de Luna:
+Configuración entregada: **GPT-6 Luna con esfuerzo de razonamiento `minimal`** como principal y
+**Claude Haiku 5.5** como alterno, con las instrucciones v4 (D-017). Media de 3 corridas de Luna
+`minimal`:
 
 | Conjunto | Exactos | Latencia p50 | Costo por pedido |
 |---|---|---|---|
-| Prueba (15, escritos antes de ajustar las instrucciones) | 100 % | 3.4 s | US$0.00008 |
-| Propios de desarrollo (40) | 100 % | 3.4 s | US$0.00008 |
-| Publicados (84) | 98.8 % | 3.6 s | US$0.00011 |
+| Prueba (15, escritos antes de ajustar las instrucciones) | 100 % | 2.0 s | US$0.00006 |
+| Propios de desarrollo (45) | 99.3 % | 1.5 s | US$0.00006 |
+| Publicados (84) | 98.4 % | 1.6 s | US$0.00008 |
 
-- **Pedidos confirmados con error:** ninguno con Luna. Sus fallos son pendientes de "pasta"
-  ambiguo, que van a revisión humana; Haiku confirmó 4 pedidos equivocados en 3 corridas.
-- **Condiciones intactas:** en el 100 % de los 2,502 casos evaluados (18 corridas, incluidas las
+- **Pedidos confirmados con error:** 1 en las 3 corridas (P035, un audio transcrito con una
+  corrección). Los demás fallos son pendientes de "pasta" ambiguo, que van a revisión humana.
+- **Frente al esfuerzo del proveedor (D-014):** la mitad de la latencia (p50 de 3.0 s a 1.6 s en
+  los publicados) y un 25 % menos de costo, con el mismo número de confirmados con error.
+- **Condiciones intactas:** en el 100 % de los 4,230 casos evaluados (30 corridas, incluidas las
   inyecciones): ningún mensaje cambió un precio ni un descuento.
 
-La comparación completa (v1, v2 y v3 con los dos modelos) está en
-[evidencia/comparacion.md](evidencia/comparacion.md), y el análisis en D-012 y D-014.
+La comparación completa (v1 a v4 con los dos modelos y, en v4, Luna con esfuerzo `low` y
+`minimal`) está en [evidencia/comparacion.md](evidencia/comparacion.md), y el análisis en D-012,
+D-014 y D-017.
 
 ## Estructura del repositorio
 
