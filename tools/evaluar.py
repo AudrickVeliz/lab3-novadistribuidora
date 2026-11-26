@@ -3,8 +3,8 @@
 python tools/evaluar.py                               # las alternativas de D-012, 3 corridas
 python tools/evaluar.py --alternativas haiku --corridas 1
 
-Cada caso (84 publicados, 40 propios de D-012 y 15 de prueba de D-014) pasa por el mismo
-camino que la API (Servicio.interpretar_pedido) y se califica con código
+Cada caso (84 publicados, 45 propios de D-012 y D-015, y 15 de prueba de D-014) pasa por el
+mismo camino que la API (Servicio.interpretar_pedido) y se califica con código
 (novadistribuidora.calificaciones).
 Cada corrida es un run del experimento "evaluacion" de MLflow, con sus trazas, tokens y costo.
 Escribe evidencia/comparacion.csv y evidencia/comparacion.md. Necesita .env con la clave, los

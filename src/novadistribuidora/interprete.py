@@ -23,7 +23,7 @@ from novadistribuidora.servicio import InterpreteNoDisponible
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
-VERSION_INSTRUCCIONES = "v3"
+VERSION_INSTRUCCIONES = "v4"
 # 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
 CACHE = {"type": "ephemeral"}
 
@@ -40,7 +40,9 @@ puede ser más de un producto (por ejemplo "aceite" sin marca o "coca" sin prese
 todos los posibles y no elijas. Si la distribuidora no lo vende, una lista vacía. Nunca \
 inventes un SKU.
 2. cantidad: el número que dice el cliente, aunque lo escriba en letras ("tres" es 3, "una \
-docena" es 1 con unidad docena). null si no dice cantidad.
+docena" es 1 con unidad docena). Si dice una fracción de la unidad, escríbela tal cual, sin \
+redondear: "caja y media" es 1.5 y "medio fardo" es 0.5, con unidad "venta". null si no dice \
+cantidad.
 3. unidad: "venta" si habla de fardos, cajas, displays o quintales, o si no nombra ninguna \
 unidad, aunque el producto vaya en plural ("tres detergentes espumoso" son 3 de venta); \
 "suelta" solo si nombra botellas, latas, bolsas, bolsitas, sobres, unidades, o libras de un \

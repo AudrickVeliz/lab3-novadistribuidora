@@ -14,7 +14,7 @@ FUENTES = {
     conjunto: json.loads(fuente.read_text(encoding="utf-8"))
     for conjunto, (fuente, _) in CONJUNTOS.items()
 }
-TAMANOS = {"propios": 40, "prueba": 15}
+TAMANOS = {"propios": 45, "prueba": 15}
 
 
 @pytest.mark.parametrize("conjunto", CONJUNTOS)
