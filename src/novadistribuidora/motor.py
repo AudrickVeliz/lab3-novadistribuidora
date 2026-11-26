@@ -14,6 +14,7 @@ from novadistribuidora.pedido import Estado, Pedido, Pendiente
 from novadistribuidora.politicas import (
     Cantidades,
     acumular_cantidad,
+    agregar_pendiente_corregido,
     aplicar_sustitutos,
     calcular_lineas,
     cantidad_en_unidades_de_venta,
@@ -85,10 +86,11 @@ def _aplicar_mencion(
         if isinstance(a_quitar, str):
             return quitar_producto(cantidades, a_quitar), pendientes
         return cantidades, pendientes if a_quitar is None else [*pendientes, a_quitar]
+    corrige = mencion.operacion == "corregir"
     sku = resolver_producto(mencion, productos)
     if isinstance(sku, Pendiente):
-        return cantidades, [*pendientes, sku]
-    corrige = mencion.operacion == "corregir"
+        duda = agregar_pendiente_corregido(pendientes, sku) if corrige else [*pendientes, sku]
+        return cantidades, duda
     if corrige:
         pendientes = descartar_cantidades_corregidas(pendientes, sku)
     cantidad = cantidad_en_unidades_de_venta(mencion, productos[sku])
