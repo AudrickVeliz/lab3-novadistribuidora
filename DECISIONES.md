@@ -78,6 +78,10 @@ Cada decisión registra su contexto, las alternativas consideradas y su justific
 | Quitar algo que no está en el pedido | No hace nada | No hay línea que eliminar ni nada que revisar |
 | Quitar algo ambiguo entre dos líneas del pedido | Pendiente `producto_ambiguo` con esas dos opciones | Ante la duda no se adivina (§1) |
 | Corregir la cantidad de un producto no mencionado antes | Se agrega con esa cantidad | El cliente declara cuánto quiere de ese producto |
+| Corregir una cantidad que no se pudo convertir ("fardo y medio, no, mejor 2") | Vale la corrección: se descarta el pendiente `cantidad_no_convertible` de ese producto | §2: "en ese caso vale la corrección"; agregado el 2026-11-25 tras la batería de D-015 |
+| Corregir a una cantidad que no se puede convertir ("3 fardos, no, mejor 36 botellas") | Pendiente `cantidad_no_convertible` y la línea anterior sale | La cantidad anterior ya no es la que el cliente quiere; dejarla sería adivinar |
+| Corregir una mención que sigue sin resolverse ("media caja de aceite", "mejor una caja de aceite") | Un solo pendiente: la corrección no agrega la misma duda otra vez | Es el mismo producto; la misma duda se identifica por sus opciones y, sin opciones, por el texto. Agregado el 2026-11-25 tras la prueba en vivo de PR #20 |
+| Una corrección que aclara el producto ambiguo ("2 cajas de aceite, perdón, mejor 3 del dorado") | Si dice la cantidad, sale la duda que tenía ese SKU entre sus opciones y vale la línea corregida; sin cantidad, la duda queda | §2: vale la corrección. La mención ambigua no guarda su cantidad, y usar 1 sería adivinar. Sin `corregir` la duda siempre queda (caso D008) |
 | Sustituto que también está agotado | Pendiente `agotado_sin_sustituto` | §4 exige un sustituto **disponible** |
 | Opciones de `cantidad_no_convertible` | El SKU del producto | El producto es conocido; el asesor solo resuelve la cantidad |
 | Varios motivos de revisión | Uno por tipo, en orden de aparición; `credito_excedido` al final | Orden estable para la respuesta y las pruebas |

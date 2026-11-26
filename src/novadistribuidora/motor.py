@@ -14,9 +14,12 @@ from novadistribuidora.pedido import Estado, Pedido, Pendiente
 from novadistribuidora.politicas import (
     Cantidades,
     acumular_cantidad,
+    agregar_pendiente_corregido,
     aplicar_sustitutos,
     calcular_lineas,
     cantidad_en_unidades_de_venta,
+    descartar_cantidades_corregidas,
+    descartar_dudas_aclaradas,
     estado_pedido,
     excede_credito,
     fecha_entrega,
@@ -50,9 +53,7 @@ def armar_pedido(
         cantidades = lineas_de_siempre(datos.historial, cliente.cliente_id)
     pendientes: list[Pendiente] = []
     for mencion in interpretacion.menciones:
-        cantidades, pendiente = _aplicar_mencion(cantidades, mencion, datos.productos)
-        if pendiente is not None:
-            pendientes.append(pendiente)
+        cantidades, pendientes = _aplicar_mencion(cantidades, pendientes, mencion, datos.productos)
 
     entregables, sustituciones, agotados = aplicar_sustitutos(cantidades, datos.productos)
     pendientes += agotados
@@ -76,18 +77,27 @@ def armar_pedido(
 
 
 def _aplicar_mencion(
-    cantidades: Cantidades, mencion: Mencion, productos: Mapping[str, Producto]
-) -> tuple[Cantidades, Pendiente | None]:
+    cantidades: Cantidades,
+    pendientes: list[Pendiente],
+    mencion: Mencion,
+    productos: Mapping[str, Producto],
+) -> tuple[Cantidades, list[Pendiente]]:
     if mencion.operacion == "quitar":
         a_quitar = resolver_producto_a_quitar(mencion, cantidades)
         if isinstance(a_quitar, str):
-            return quitar_producto(cantidades, a_quitar), None
-        return cantidades, a_quitar
+            return quitar_producto(cantidades, a_quitar), pendientes
+        return cantidades, pendientes if a_quitar is None else [*pendientes, a_quitar]
+    corrige = mencion.operacion == "corregir"
     sku = resolver_producto(mencion, productos)
     if isinstance(sku, Pendiente):
-        return cantidades, sku
+        duda = agregar_pendiente_corregido(pendientes, sku) if corrige else [*pendientes, sku]
+        return cantidades, duda
+    if corrige:
+        pendientes = descartar_cantidades_corregidas(pendientes, sku)
+        pendientes = descartar_dudas_aclaradas(pendientes, mencion, sku)
     cantidad = cantidad_en_unidades_de_venta(mencion, productos[sku])
     if isinstance(cantidad, Pendiente):
-        return cantidades, cantidad
-    corrige = mencion.operacion == "corregir"
-    return acumular_cantidad(cantidades, sku, cantidad, corrige), None
+        # Vale la corrección aunque no se pueda convertir: la cantidad anterior tampoco queda.
+        sin_la_anterior = quitar_producto(cantidades, sku) if corrige else cantidades
+        return sin_la_anterior, [*pendientes, cantidad]
+    return acumular_cantidad(cantidades, sku, cantidad, corrige), pendientes
