@@ -82,6 +82,14 @@ def test_trazas_una_solicitud_invalida_tambien_deja_traza(cliente_http):
     assert "estado" not in traza.info.tags
 
 
+def test_trazas_un_cuerpo_ilegible_deja_traza(cliente_http):
+    cliente_http.post(RUTA, content=b"\x81", headers={"content-type": "application/json"})
+
+    traza = _ultima_traza()
+    assert traza.info.tags["http.status_code"] == "422"
+    assert _raiz(traza).outputs == {"detail": "cuerpo: no está en UTF-8 ni en Windows-1252"}
+
+
 def test_trazas_un_cliente_inexistente_deja_traza(cliente_http):
     cliente_http.post(RUTA, json=SOLICITUD | {"cliente_id": "C999"})
 
