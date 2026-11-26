@@ -10,7 +10,7 @@ import contextvars
 import re
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -27,6 +27,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 ETIQUETA = "mensajes_del_cliente"
 # Etiqueta de INSTRUCCIONES en las corridas de evaluación: se cambia al cambiar el prompt (D-014).
 VERSION_INSTRUCCIONES = "v4"
+# Esfuerzo de razonamiento que se compara en la evaluación (D-017); sin él, el del proveedor.
+Esfuerzo = Literal["low", "minimal"]
 # 5 minutos, la de menor costo de escritura: entre pedidos seguidos basta para reutilizarla.
 CACHE = {"type": "ephemeral"}
 
@@ -138,7 +140,18 @@ def con_plazo(modelo: Runnable, plazo_s: float) -> Runnable:
     return RunnableLambda(invocar, name=modelo.get_name())
 
 
-def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
+def cuerpo_openrouter(esfuerzo: Esfuerzo | None) -> dict[str, Any]:
+    """Los parámetros propios de OpenRouter que van en cada solicitud."""
+    # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
+    cuerpo: dict[str, Any] = {"provider": {"require_parameters": True}}
+    if esfuerzo is not None:
+        cuerpo["reasoning"] = {"effort": esfuerzo}
+    return cuerpo
+
+
+def crear_modelo(
+    nombre: str, configuracion: Configuracion, esfuerzo: Esfuerzo | None = None
+) -> Runnable:
     """Modelo de OpenRouter con salida estructurada y plazo; sin reintentos: los da la cadena."""
     # Sin temperature: los modelos de razonamiento (Haiku 5.5, GPT-6 Luna) no la admiten, y con
     # require_parameters OpenRouter no encontraría ningún proveedor (404).
@@ -148,8 +161,7 @@ def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
         api_key=SecretStr(configuracion.openrouter_api_key),
         timeout=configuracion.tiempo_limite_s,
         max_retries=0,
-        # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
-        extra_body={"provider": {"require_parameters": True}},
+        extra_body=cuerpo_openrouter(esfuerzo),
     )
     estructurado = modelo.with_structured_output(Interpretacion, method="json_schema", strict=True)
     return con_plazo(estructurado, configuracion.tiempo_limite_s)

@@ -17,6 +17,7 @@ from novadistribuidora.interprete import (
     con_plazo,
     crear_cadena,
     crear_interprete,
+    cuerpo_openrouter,
     describir_catalogo,
     formatear_mensajes,
 )
@@ -180,6 +181,17 @@ def test_una_respuesta_sin_interpretacion_no_esta_disponible():
 
 
 # Construcción con OpenRouter (sin llamar a la red)
+
+
+def test_sin_esfuerzo_openrouter_solo_exige_respetar_los_parametros():
+    assert cuerpo_openrouter(None) == {"provider": {"require_parameters": True}}
+
+
+def test_el_esfuerzo_de_razonamiento_se_pide_a_openrouter():
+    assert cuerpo_openrouter("minimal") == {
+        "provider": {"require_parameters": True},
+        "reasoning": {"effort": "minimal"},
+    }
 
 
 def test_crear_interprete_con_openrouter_no_llama_a_la_red(datos):
