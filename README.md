@@ -71,6 +71,7 @@ curl -X POST http://localhost:8000/v1/pedidos/interpretar \
 |---|---|---|
 | `OPENROUTER_API_KEY` | Clave de OpenRouter | (obligatoria) |
 | `MODELO` | Modelo que interpreta los mensajes | `openai/gpt-6-luna` |
+| `ESFUERZO_MODELO` | Esfuerzo de razonamiento del principal: `minimal`, `low` o `proveedor` (el del modelo) | `minimal` |
 | `MODELO_ALTERNO` | Modelo que responde si el principal falla | `anthropic/claude-haiku-5.5` |
 | `TIEMPO_LIMITE_MODELO_S` | Segundos máximos por llamada al modelo | `10` |
 | `CARPETA_DATOS` | Carpeta de los parquet publicados | `datos` (en el compose, `/datos`) |
@@ -96,17 +97,21 @@ docker compose start mlflow
 
 ## Reproducir la evaluación
 
-La comparación de alternativas (D-012, D-014) corre los 84 casos publicados
-(`ejemplos/mensajes_dev.jsonl`), los 40 propios de desarrollo (`evaluacion/casos_propios.jsonl`)
+La comparación de alternativas (D-012, D-014, D-017) corre los 84 casos publicados
+(`ejemplos/mensajes_dev.jsonl`), los 45 propios de desarrollo (`evaluacion/casos_propios.jsonl`)
 y los 15 de prueba (`evaluacion/casos_prueba.jsonl`), en el mismo formato, con cada modelo. Los
 califica con código y registra un run por corrida en el experimento `evaluacion` de MLflow, con
 la versión de las instrucciones (`VERSION_INSTRUCCIONES`) como etiqueta. Con el producto levantado y el entorno de desarrollo
 (ver abajo):
 
 ```bash
-python tools/evaluar.py                 # GPT-6 Luna y Haiku 5.5, 3 corridas cada uno
+python tools/evaluar.py                 # haiku, luna, luna-low y luna-minimal, 3 corridas cada una
+python tools/evaluar.py --alternativas luna-minimal --hilos 1 --pausa 3
 python tools/evaluar.py --resumir       # solo regenera la evidencia desde MLflow
 ```
+
+Con una cuenta nueva de OpenRouter, GPT-6 Luna admite 20 solicitudes por minuto: para sus
+alternativas, `--hilos 1 --pausa 3` evita los 429 (D-017).
 
 El resultado queda en `evidencia/comparacion.md` y `evidencia/comparacion.csv`, y el detalle
 de cada caso, con su traza, en http://localhost:5000 (experimento `evaluacion`).

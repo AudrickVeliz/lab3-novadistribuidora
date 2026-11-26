@@ -1,15 +1,21 @@
 """Configuración del servicio desde variables de entorno (.env, documentado en .env.example).
 
-Solo la clave es obligatoria: los modelos y el tiempo límite tienen el valor de .env.example,
-para que un .env con solo la clave levante el servicio (D-009).
+Solo la clave es obligatoria: los modelos, el esfuerzo y el tiempo límite tienen el valor de
+.env.example, para que un .env con solo la clave levante el servicio (D-009).
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal, get_args
 
 MODELO_POR_OMISION = "openai/gpt-6-luna"
 MODELO_ALTERNO_POR_OMISION = "anthropic/claude-haiku-5.5"
+# Esfuerzo de razonamiento del principal; "proveedor" no lo envía y deja el del modelo (D-017).
+Esfuerzo = Literal["low", "minimal"]
+SIN_ESFUERZO = "proveedor"
+# Con minimal, Luna responde en la mitad del tiempo; su calidad medida está en D-017.
+ESFUERZO_POR_OMISION: Esfuerzo = "minimal"
 CARPETA_DATOS_POR_OMISION = "datos"
 # En local; docker compose lo cambia por el nombre del servicio de MLflow.
 MLFLOW_POR_OMISION = "http://localhost:5000"
@@ -26,6 +32,7 @@ class Configuracion:
     # repr=False: la clave nunca aparece en un log ni en un mensaje de error.
     openrouter_api_key: str = field(repr=False)
     modelo: str
+    esfuerzo: Esfuerzo | None
     modelo_alterno: str
     carpeta_datos: Path
     tiempo_limite_s: float
@@ -41,6 +48,7 @@ class Configuracion:
         return cls(
             openrouter_api_key=clave,
             modelo=_valor(entorno, "MODELO", MODELO_POR_OMISION),
+            esfuerzo=_esfuerzo(_valor(entorno, "ESFUERZO_MODELO", ESFUERZO_POR_OMISION)),
             modelo_alterno=_valor(entorno, "MODELO_ALTERNO", MODELO_ALTERNO_POR_OMISION),
             carpeta_datos=Path(_valor(entorno, "CARPETA_DATOS", CARPETA_DATOS_POR_OMISION)),
             tiempo_limite_s=_segundos(_valor(entorno, "TIEMPO_LIMITE_MODELO_S", "")),
@@ -51,6 +59,16 @@ class Configuracion:
 def _valor(entorno: Mapping[str, str], nombre: str, por_omision: str) -> str:
     """Una variable vacía cuenta como ausente: así se comporta una línea "MODELO=" del .env."""
     return entorno.get(nombre, "").strip() or por_omision
+
+
+def _esfuerzo(texto: str) -> Esfuerzo | None:
+    if texto == SIN_ESFUERZO:
+        return None
+    for esfuerzo in get_args(Esfuerzo):
+        if texto == esfuerzo:
+            return esfuerzo
+    opciones = f"{', '.join(get_args(Esfuerzo))} o {SIN_ESFUERZO}"
+    raise ConfiguracionInvalida(f"ESFUERZO_MODELO debe ser {opciones}, no '{texto}'")
 
 
 def _segundos(texto: str) -> float:

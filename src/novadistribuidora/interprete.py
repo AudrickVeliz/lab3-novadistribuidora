@@ -18,7 +18,7 @@ from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from novadistribuidora.configuracion import Configuracion
+from novadistribuidora.configuracion import Configuracion, Esfuerzo
 from novadistribuidora.datos import Datos, Producto
 from novadistribuidora.interpretacion import Interpretacion
 from novadistribuidora.servicio import InterpreteNoDisponible
@@ -138,7 +138,18 @@ def con_plazo(modelo: Runnable, plazo_s: float) -> Runnable:
     return RunnableLambda(invocar, name=modelo.get_name())
 
 
-def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
+def cuerpo_openrouter(esfuerzo: Esfuerzo | None) -> dict[str, Any]:
+    """Los parámetros propios de OpenRouter que van en cada solicitud."""
+    # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
+    cuerpo: dict[str, Any] = {"provider": {"require_parameters": True}}
+    if esfuerzo is not None:
+        cuerpo["reasoning"] = {"effort": esfuerzo}
+    return cuerpo
+
+
+def crear_modelo(
+    nombre: str, configuracion: Configuracion, esfuerzo: Esfuerzo | None = None
+) -> Runnable:
     """Modelo de OpenRouter con salida estructurada y plazo; sin reintentos: los da la cadena."""
     # Sin temperature: los modelos de razonamiento (Haiku 5.5, GPT-6 Luna) no la admiten, y con
     # require_parameters OpenRouter no encontraría ningún proveedor (404).
@@ -148,8 +159,7 @@ def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
         api_key=SecretStr(configuracion.openrouter_api_key),
         timeout=configuracion.tiempo_limite_s,
         max_retries=0,
-        # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
-        extra_body={"provider": {"require_parameters": True}},
+        extra_body=cuerpo_openrouter(esfuerzo),
     )
     estructurado = modelo.with_structured_output(Interpretacion, method="json_schema", strict=True)
     return con_plazo(estructurado, configuracion.tiempo_limite_s)
@@ -176,7 +186,8 @@ class InterpreteLangChain:
 
 def crear_interprete(configuracion: Configuracion, datos: Datos) -> InterpreteLangChain:
     cadena = crear_cadena(
-        crear_modelo(configuracion.modelo, configuracion),
+        # El esfuerzo es del principal: el alterno, de otro proveedor, responde con el suyo.
+        crear_modelo(configuracion.modelo, configuracion, configuracion.esfuerzo),
         crear_modelo(configuracion.modelo_alterno, configuracion),
         describir_catalogo(datos.productos, datos.sinonimos),
     )
