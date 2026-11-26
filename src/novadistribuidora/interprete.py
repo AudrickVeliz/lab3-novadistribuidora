@@ -2,16 +2,19 @@
 
 Una cadena de una sola llamada: instrucciones y catálogo en el mensaje de sistema, los mensajes
 del cliente delimitados como datos, y salida estructurada validada con Pydantic. Si el modelo
-principal falla se reintenta una vez y después se usa el alterno; si también falla, el
-servicio responde 503 (D-008). El modelo nunca ve precios, descuentos ni crédito.
+principal falla o agota su plazo responde el alterno; si también falla, el servicio responde
+503 (D-008, D-016). El modelo nunca ve precios, descuentos ni crédito.
 """
 
+import contextvars
 import re
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, wait
+from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -109,8 +112,34 @@ def crear_cadena(principal: Runnable, alterno: Runnable, catalogo: str) -> Runna
     return prompt | principal.with_fallbacks([alterno])
 
 
+class PlazoAgotado(Exception):
+    """El modelo no respondió dentro de su plazo: la cadena pasa al alterno (D-016)."""
+
+
+def con_plazo(modelo: Runnable, plazo_s: float) -> Runnable:
+    """Corta la espera a los `plazo_s` segundos de reloj, aunque el proveedor siga enviando datos.
+
+    El timeout de httpx es por lectura y OpenRouter mantiene viva la conexión mientras procesa:
+    una llamada tardó 30 s con un límite de 10 (D-014). La llamada cortada termina en su hilo y
+    su resultado se descarta.
+    """
+
+    def invocar(entrada: Any, config: RunnableConfig) -> Any:
+        hilos = ThreadPoolExecutor(max_workers=1, thread_name_prefix="modelo")
+        # El contexto copiado lleva la traza de MLflow al hilo: la llamada queda dentro del pedido.
+        futuro = hilos.submit(contextvars.copy_context().run, modelo.invoke, entrada, config)
+        hilos.shutdown(wait=False)
+        # wait() y no result(timeout=): en 3.12, un TimeoutError del modelo parecería un plazo.
+        terminados, _ = wait([futuro], timeout=plazo_s)
+        if not terminados:
+            raise PlazoAgotado(f"el modelo no respondió en {plazo_s:g} s")
+        return futuro.result()
+
+    return RunnableLambda(invocar, name=modelo.get_name())
+
+
 def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
-    """Modelo de OpenRouter con salida estructurada; sin reintentos propios: los da la cadena."""
+    """Modelo de OpenRouter con salida estructurada y plazo; sin reintentos: los da la cadena."""
     # Sin temperature: los modelos de razonamiento (Haiku 5.5, GPT-6 Luna) no la admiten, y con
     # require_parameters OpenRouter no encontraría ningún proveedor (404).
     modelo = ChatOpenAI(
@@ -122,7 +151,8 @@ def crear_modelo(nombre: str, configuracion: Configuracion) -> Runnable:
         # Solo proveedores que respetan la salida estructurada (enrutamiento de OpenRouter).
         extra_body={"provider": {"require_parameters": True}},
     )
-    return modelo.with_structured_output(Interpretacion, method="json_schema", strict=True)
+    estructurado = modelo.with_structured_output(Interpretacion, method="json_schema", strict=True)
+    return con_plazo(estructurado, configuracion.tiempo_limite_s)
 
 
 class InterpreteLangChain:
