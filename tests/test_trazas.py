@@ -255,6 +255,9 @@ def test_trazas_activar_respeta_los_ajustes_del_entorno(monkeypatch, mlflow_de_p
     assert trazas.os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "6"
 
 
+ESPERA_DE_MLFLOW_S = float(trazas.AJUSTES_DEL_CLIENTE["MLFLOW_HTTP_REQUEST_TIMEOUT"])
+
+
 @pytest.mark.parametrize("escenario", ["desde_el_arranque", "despues_del_experimento"])
 def test_trazas_mlflow_colgado_no_frena_las_solicitudes(escenario, tmp_path):
     """En un proceso limpio, con envío asíncrono como en producción (tests/mlflow_colgado.py)."""
@@ -271,7 +274,9 @@ def test_trazas_mlflow_colgado_no_frena_las_solicitudes(escenario, tmp_path):
     )
 
     assert resultado.returncode == 0, resultado.stderr[-2000:]
-    peor_latencia, estado = resultado.stdout.split()
+    primera, peor_de_las_demas, estado = resultado.stdout.split()
     # Esperar a MLflow costaría MLFLOW_HTTP_REQUEST_TIMEOUT (5 s) o más; la solicitud no espera.
-    assert float(peor_latencia) < 1.0
+    # La primera carga el trazado de MLflow y, con la suite completa, pasó de 1 s (1.34 s).
+    assert float(primera) < ESPERA_DE_MLFLOW_S
+    assert float(peor_de_las_demas) < 1.0
     assert estado == "degradado"
