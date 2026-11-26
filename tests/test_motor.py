@@ -147,6 +147,19 @@ def test_motor_una_correccion_de_un_producto_ambiguo_deja_un_solo_pendiente(dato
     assert pedido.pendientes == (aceite,)
 
 
+def test_motor_una_correccion_que_aclara_el_producto_confirma_el_pedido(datos, cliente):
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=2),
+        Mencion(texto="del dorado", skus=["A06"], cantidad=3, operacion="corregir"),
+    )
+
+    assert [(linea.sku, linea.cantidad) for linea in pedido.lineas] == [("A06", 3)]
+    assert pedido.pendientes == ()
+    assert pedido.estado == Estado.CONFIRMADO
+
+
 def test_motor_dos_menciones_ambiguas_sin_corregir_dejan_dos_pendientes(datos, cliente):
     # Sin corrección son dos pedidos del cliente; el asesor resuelve cada uno.
     pedido = _pedido(
@@ -157,6 +170,18 @@ def test_motor_dos_menciones_ambiguas_sin_corregir_dejan_dos_pendientes(datos, c
     )
 
     assert len(pedido.pendientes) == 2
+
+
+def test_motor_una_mencion_especifica_sin_corregir_no_aclara_la_duda(datos, cliente):
+    # Como D008, "pasta: 2, seis fardos de espagueti bella": la duda de "pasta" queda.
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="naranjitas", skus=["B04", "B05"], cantidad=2),
+        Mencion(texto="naranjita 1.5", skus=["B05"], cantidad=6),
+    )
+
+    assert [pendiente.motivo for pendiente in pedido.pendientes] == [Motivo.PRODUCTO_AMBIGUO]
 
 
 def test_motor_credito_excedido_calcula_las_lineas_igual(datos, cliente):

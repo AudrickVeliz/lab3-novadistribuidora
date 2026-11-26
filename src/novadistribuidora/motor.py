@@ -19,6 +19,7 @@ from novadistribuidora.politicas import (
     calcular_lineas,
     cantidad_en_unidades_de_venta,
     descartar_cantidades_corregidas,
+    descartar_dudas_aclaradas,
     estado_pedido,
     excede_credito,
     fecha_entrega,
@@ -93,6 +94,7 @@ def _aplicar_mencion(
         return cantidades, duda
     if corrige:
         pendientes = descartar_cantidades_corregidas(pendientes, sku)
+        pendientes = descartar_dudas_aclaradas(pendientes, mencion, sku)
     cantidad = cantidad_en_unidades_de_venta(mencion, productos[sku])
     if isinstance(cantidad, Pendiente):
         # Vale la corrección aunque no se pueda convertir: la cantidad anterior tampoco queda.

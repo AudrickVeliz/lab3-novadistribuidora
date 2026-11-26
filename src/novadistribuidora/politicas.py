@@ -85,6 +85,20 @@ def descartar_cantidades_corregidas(pendientes: Sequence[Pendiente], sku: str) -
     return [p for p in pendientes if (p.motivo, p.opciones) != corregido]
 
 
+def descartar_dudas_aclaradas(
+    pendientes: Sequence[Pendiente], mencion: Mencion, sku: str
+) -> list[Pendiente]:
+    """§2: vale la corrección; "perdón, mejor 3 del dorado" aclara cuál aceite quería.
+
+    Sin cantidad, la duda queda: la mención ambigua no conserva la suya y usar 1 sería adivinar.
+    """
+    if mencion.cantidad is None:
+        return list(pendientes)
+    return [
+        p for p in pendientes if not (p.motivo == Motivo.PRODUCTO_AMBIGUO and sku in p.opciones)
+    ]
+
+
 def agregar_pendiente_corregido(
     pendientes: Sequence[Pendiente], pendiente: Pendiente
 ) -> list[Pendiente]:
