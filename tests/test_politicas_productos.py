@@ -9,6 +9,7 @@ from novadistribuidora.politicas import (
     acumular_cantidad,
     aplicar_sustitutos,
     cantidad_en_unidades_de_venta,
+    descartar_cantidades_corregidas,
     lineas_de_siempre,
     quitar_producto,
     resolver_producto,
@@ -136,6 +137,17 @@ def test_politica_cantidades_una_correccion_reemplaza():
 
     assert cantidades == {"B01": 5, "A06": 1}
     assert list(cantidades) == ["B01", "A06"]
+
+
+def test_politica_cantidades_una_correccion_descarta_la_cantidad_no_convertible_anterior():
+    # "fardo y medio de kola 600, no, mejor que sean 2"
+    no_convertible = Pendiente(Motivo.CANTIDAD_NO_CONVERTIBLE, "fardo y medio de kola", ("B01",))
+    ambiguo = Pendiente(Motivo.PRODUCTO_AMBIGUO, "aceite", ("A06", "A07"))
+    de_otro = Pendiente(Motivo.CANTIDAD_NO_CONVERTIBLE, "media caja de jugo", ("B09",))
+
+    pendientes = descartar_cantidades_corregidas([no_convertible, ambiguo, de_otro], "B01")
+
+    assert pendientes == [ambiguo, de_otro]
 
 
 def test_politica_cantidades_acumular_no_modifica_el_pedido_original():

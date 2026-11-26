@@ -79,6 +79,12 @@ def acumular_cantidad(cantidades: Cantidades, sku: str, cantidad: int, corrige: 
     return nuevas
 
 
+def descartar_cantidades_corregidas(pendientes: Sequence[Pendiente], sku: str) -> list[Pendiente]:
+    """§2: vale la corrección; la cantidad que el producto no pudo convertir antes ya no cuenta."""
+    corregido = (Motivo.CANTIDAD_NO_CONVERTIBLE, (sku,))
+    return [p for p in pendientes if (p.motivo, p.opciones) != corregido]
+
+
 def quitar_producto(cantidades: Cantidades, sku: str) -> Cantidades:
     """§2: "pero sin las papalinas" elimina la línea."""
     return {actual: cantidad for actual, cantidad in cantidades.items() if actual != sku}
