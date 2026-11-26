@@ -7,6 +7,7 @@ from novadistribuidora.interpretacion import Mencion
 from novadistribuidora.pedido import Motivo, Pendiente, Sustitucion
 from novadistribuidora.politicas import (
     acumular_cantidad,
+    agregar_pendiente_corregido,
     aplicar_sustitutos,
     cantidad_en_unidades_de_venta,
     descartar_cantidades_corregidas,
@@ -148,6 +149,29 @@ def test_politica_cantidades_una_correccion_descarta_la_cantidad_no_convertible_
     pendientes = descartar_cantidades_corregidas([no_convertible, ambiguo, de_otro], "B01")
 
     assert pendientes == [ambiguo, de_otro]
+
+
+def test_politica_cantidades_una_correccion_que_repite_la_duda_no_la_duplica():
+    # "media caja de aceite" y luego "perdón, mejor que sea una caja de aceite"
+    anterior = Pendiente(Motivo.PRODUCTO_AMBIGUO, "aceite", ("A06", "A07"))
+    corregido = Pendiente(Motivo.PRODUCTO_AMBIGUO, "el aceite", ("A06", "A07"))
+
+    assert agregar_pendiente_corregido([anterior], corregido) == [anterior]
+
+
+def test_politica_cantidades_una_correccion_con_otra_duda_se_agrega():
+    aceite = Pendiente(Motivo.PRODUCTO_AMBIGUO, "aceite", ("A06", "A07"))
+    naranjitas = Pendiente(Motivo.PRODUCTO_AMBIGUO, "naranjitas", ("B04", "B05"))
+
+    assert agregar_pendiente_corregido([aceite], naranjitas) == [aceite, naranjitas]
+
+
+def test_politica_cantidades_sin_opciones_la_duda_es_el_texto():
+    cerveza = Pendiente(Motivo.PRODUCTO_NO_EXISTE, "cerveza", ())
+    vino = Pendiente(Motivo.PRODUCTO_NO_EXISTE, "vino", ())
+
+    assert agregar_pendiente_corregido([cerveza], cerveza) == [cerveza]
+    assert agregar_pendiente_corregido([cerveza], vino) == [cerveza, vino]
 
 
 def test_politica_cantidades_acumular_no_modifica_el_pedido_original():

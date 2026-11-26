@@ -85,6 +85,21 @@ def descartar_cantidades_corregidas(pendientes: Sequence[Pendiente], sku: str) -
     return [p for p in pendientes if (p.motivo, p.opciones) != corregido]
 
 
+def agregar_pendiente_corregido(
+    pendientes: Sequence[Pendiente], pendiente: Pendiente
+) -> list[Pendiente]:
+    """§2: vale la corrección; si repite la duda de la mención anterior, el asesor la ve una vez."""
+    if any(_misma_duda(anterior, pendiente) for anterior in pendientes):
+        return list(pendientes)
+    return [*pendientes, pendiente]
+
+
+def _misma_duda(anterior: Pendiente, nuevo: Pendiente) -> bool:
+    # Las opciones identifican la duda; sin opciones (producto inexistente), solo queda el texto.
+    misma_duda = (anterior.motivo, anterior.opciones) == (nuevo.motivo, nuevo.opciones)
+    return misma_duda and (bool(nuevo.opciones) or anterior.texto == nuevo.texto)
+
+
 def quitar_producto(cantidades: Cantidades, sku: str) -> Cantidades:
     """§2: "pero sin las papalinas" elimina la línea."""
     return {actual: cantidad for actual, cantidad in cantidades.items() if actual != sku}

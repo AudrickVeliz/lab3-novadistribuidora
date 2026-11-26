@@ -135,6 +135,30 @@ def test_motor_una_correccion_no_convertible_quita_la_cantidad_anterior(datos, c
     assert pedido.estado == Estado.REQUIERE_REVISION
 
 
+def test_motor_una_correccion_de_un_producto_ambiguo_deja_un_solo_pendiente(datos, cliente):
+    aceite = Pendiente(Motivo.PRODUCTO_AMBIGUO, "aceite", ("A06", "A07"))
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=0.5),
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=1, operacion="corregir"),
+    )
+
+    assert pedido.pendientes == (aceite,)
+
+
+def test_motor_dos_menciones_ambiguas_sin_corregir_dejan_dos_pendientes(datos, cliente):
+    # Sin corrección son dos pedidos del cliente; el asesor resuelve cada uno.
+    pedido = _pedido(
+        datos,
+        cliente,
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=2),
+        Mencion(texto="aceite", skus=["A06", "A07"], cantidad=3),
+    )
+
+    assert len(pedido.pendientes) == 2
+
+
 def test_motor_credito_excedido_calcula_las_lineas_igual(datos, cliente):
     # 60 fardos × Q120 con 5 % = Q6,840; con Q1,200 de saldo supera el límite de Q8,000.
     pedido = _pedido(datos, cliente, Mencion(texto="60 kola 600", skus=["B01"], cantidad=60))
