@@ -544,6 +544,28 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Un plazo total por pedido | Código nuevo para un caso de 1 en 839 llamadas |
 | Caché de 1 hora | Escribirla cuesta más, y entre pedidos seguidos bastan 5 minutos |
 
+## D-015: las fracciones de la unidad de venta no se redondean
+
+**Fecha:** 2026-11-25
+
+**Contexto:** una batería exploratoria contra la API levantada, con 26 mensajes que no están en el catálogo de problemas, encontró dos pedidos confirmados con otra cantidad: "fardo y medio de agua pura 600" salió como 1 fardo y "media caja de jugo de naranja" como 1 caja. `Mencion.cantidad` era un entero, así que el modelo no tenía cómo escribir 1.5 y redondeaba; el código recibía un número válido y no podía saber que la conversión no era exacta. `politicas.md` §2 pide `cantidad_no_convertible` y no redondear.
+
+**Decisión:**
+
+- `Mencion.cantidad` admite fracciones (`float`, mayor que 0). El modelo solo transcribe lo que dice el cliente: "caja y media" es 1.5 con unidad de venta.
+- `cantidad_en_unidades_de_venta` lleva toda cantidad a sueltas (`Decimal(str(cantidad))` × unidades por empaque, 12 o 1) y acepta solo un número entero de unidades de venta. Si no lo es, registra `cantidad_no_convertible`. La misma función cubre sueltas, docenas y fracciones: la regla vive en un solo lugar.
+- Instrucciones v4: la regla 2 pide escribir la fracción tal cual. Sus ejemplos ("caja y media", "medio fardo") no están en ningún conjunto.
+- 5 casos propios nuevos de desarrollo (P041–P045): fracciones de fardo, caja, quintal y docena, solas o junto a otro producto. Salieron de la exploración, así que no son de prueba.
+- `Decimal(str(...))` y no `Decimal(float)`: 1.5 llega como `Decimal("1.5")` y no arrastra el error binario.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Un booleano `es_fraccion` y cantidad entera | Pierde lo que sí es convertible: media docena de un producto de 6 por empaque es 1 fardo |
+| Pedir al modelo que convierta "media caja" a sueltas | El modelo haría la aritmética (D-001) y una multiplicación equivocada daría una cantidad válida |
+| Redondear en el código | `politicas.md` §2: no se redondea |
+
 ## D-016: un plazo de reloj por cada llamada al modelo
 
 **Fecha:** 2026-11-25

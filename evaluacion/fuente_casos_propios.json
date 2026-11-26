@@ -83,5 +83,15 @@
   {"id": "P039", "tipo": "ambiguo", "entrada": {"cliente_id": "C038", "fecha_hora": "2026-11-24T09:40", "mensajes": ["galletas: 3"]},
    "interpretacion": {"es_pedido": true, "menciones": [{"texto": "galletas", "skus": ["S01", "S02", "S03"], "cantidad": 3}]}},
   {"id": "P040", "tipo": "ambiguo", "entrada": {"cliente_id": "C039", "fecha_hora": "2026-11-26T09:25", "mensajes": ["mándeme 2 cajas de jugo huerto"]},
-   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "jugo huerto", "skus": ["B09", "B10"], "cantidad": 2}]}}
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "jugo huerto", "skus": ["B09", "B10"], "cantidad": 2}]}},
+  {"id": "P041", "tipo": "unidades", "entrada": {"cliente_id": "C001", "fecha_hora": "2026-11-24T09:10", "mensajes": ["Buenas, me manda fardo y medio de agua pura 600 porfa"]},
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "fardo y medio de agua pura 600", "skus": ["B07"], "cantidad": 1.5}]}},
+  {"id": "P042", "tipo": "unidades", "entrada": {"cliente_id": "C003", "fecha_hora": "2026-11-24T10:40", "mensajes": ["media caja de jugo de naranja y 2 fardos de kola 600"]},
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "media caja de jugo de naranja", "skus": ["B09"], "cantidad": 0.5}, {"texto": "2 fardos de kola 600", "skus": ["B01"], "cantidad": 2}]}},
+  {"id": "P043", "tipo": "unidades", "entrada": {"cliente_id": "C005", "fecha_hora": "2026-11-25T08:15", "mensajes": ["medio quintal de arroz la ceiba", "y 3 fardos de frijol negro"]},
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "medio quintal de arroz la ceiba", "skus": ["A02"], "cantidad": 0.5}, {"texto": "3 fardos de frijol negro", "skus": ["A03"], "cantidad": 3}]}},
+  {"id": "P044", "tipo": "unidades", "entrada": {"cliente_id": "C007", "fecha_hora": "2026-11-24T16:05", "mensajes": ["2 cajas y media de cloro blancura"]},
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "2 cajas y media de cloro blancura", "skus": ["L03"], "cantidad": 2.5}]}},
+  {"id": "P045", "tipo": "unidades", "entrada": {"cliente_id": "C002", "fecha_hora": "2026-11-24T11:30", "mensajes": ["una docena y media de cloro blancura y 4 cajas de lavaplatos brillo"]},
+   "interpretacion": {"es_pedido": true, "menciones": [{"texto": "una docena y media de cloro blancura", "skus": ["L03"], "cantidad": 1.5, "unidad": "docena"}, {"texto": "4 cajas de lavaplatos brillo", "skus": ["L06"], "cantidad": 4}]}}
 ]

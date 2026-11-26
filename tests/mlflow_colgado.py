@@ -3,7 +3,8 @@
 python tests/mlflow_colgado.py CARPETA ESCENARIO
   ESCENARIO: "desde_el_arranque" o "despues_del_experimento" (MLflow respondió al arrancar,
   se creó el experimento y después se colgó).
-Imprime la peor latencia en segundos y el estado de /health. Lo usa tests/test_trazas.py en un
+Imprime la latencia de la primera solicitud, la peor de las demás, en segundos, y el estado de
+/health. Lo usa tests/test_trazas.py en un
 proceso aparte para no heredar el estado de MLflow de las demás pruebas.
 """
 
@@ -61,7 +62,8 @@ def main(carpeta: Path, escenario: str) -> None:
         inicio = time.perf_counter()
         assert cliente.post("/v1/pedidos/interpretar", json=SOLICITUD).status_code == 200
         latencias.append(time.perf_counter() - inicio)
-    print(max(latencias), cliente.get("/health").json()["estado"], flush=True)
+    estado = cliente.get("/health").json()["estado"]
+    print(latencias[0], max(latencias[1:]), estado, flush=True)
     # Sin esperar a que la cola agote sus reintentos contra el MLflow colgado.
     os._exit(0)
 
