@@ -1,11 +1,20 @@
 """Contrato del Anexo: POST /v1/pedidos/interpretar y GET /health, con un intérprete falso."""
 
+import asyncio
+import json
 import logging
 
 import pytest
 from fastapi.testclient import TestClient
 
-from novadistribuidora.api import MOTIVO_503, crear_app
+from novadistribuidora.api import (
+    MOTIVO_503,
+    MOTIVO_CODIFICACION,
+    CuerpoEnUtf8,
+    crear_app,
+    cuerpo_en_utf8,
+    entregar_cuerpo,
+)
 from novadistribuidora.interpretacion import Interpretacion, Mencion
 from novadistribuidora.servicio import InterpreteNoDisponible, Servicio
 
@@ -194,6 +203,70 @@ def test_contrato_cuerpo_que_no_es_json_es_422(datos):
 
     assert respuesta.status_code == 422
     assert respuesta.json()["detail"] == "cuerpo: no es JSON válido"
+
+
+def test_contrato_cuerpo_en_windows_1252_se_atiende(datos):
+    # curl en una terminal de Windows manda "mándeme" con la "á" como el byte 0xE1 (D-018).
+    interprete = InterpreteFalso()
+    cuerpo = json.dumps(_solicitud(), ensure_ascii=False).encode("cp1252")
+
+    respuesta = _cliente_http(datos, interprete).post(
+        RUTA, content=cuerpo, headers={"content-type": "application/json"}
+    )
+
+    assert respuesta.status_code == 200
+    assert interprete.llamadas == [_solicitud()["mensajes"]]
+
+
+def test_contrato_cuerpo_en_utf8_no_cambia():
+    cuerpo = json.dumps(_solicitud(), ensure_ascii=False).encode("utf-8")
+
+    assert cuerpo_en_utf8(cuerpo) == cuerpo
+
+
+def test_contrato_cuerpo_ilegible_es_422_con_el_motivo(datos):
+    # 0x81 no es UTF-8 válido y Windows-1252 no lo define.
+    respuesta = _cliente_http(datos).post(
+        RUTA, content=b'{"cliente_id": "C\x81"}', headers={"content-type": "application/json"}
+    )
+
+    assert respuesta.status_code == 422
+    assert respuesta.json()["detail"] == MOTIVO_CODIFICACION
+
+
+def test_contrato_el_cuerpo_se_entrega_una_vez_y_luego_los_mensajes_del_servidor():
+    desconexion = {"type": "http.disconnect"}
+
+    async def receive():
+        return desconexion
+
+    async def leer_dos_veces():
+        recibir = entregar_cuerpo(b"{}", receive)
+        return await recibir(), await recibir()
+
+    primero, segundo = asyncio.run(leer_dos_veces())
+
+    assert primero == {"type": "http.request", "body": b"{}", "more_body": False}
+    assert segundo == desconexion
+
+
+def test_contrato_un_cuerpo_en_varios_trozos_se_une_antes_de_recodificar():
+    # La "á" en Windows-1252 llega en el segundo trozo.
+    trozos = [
+        {"type": "http.request", "body": b'{"m": "m', "more_body": True},
+        {"type": "http.request", "body": b'\xe1ndeme"}', "more_body": False},
+    ]
+    recibido = []
+
+    async def receive():
+        return trozos.pop(0)
+
+    async def app(scope, receive, send):
+        recibido.append(await receive())
+
+    asyncio.run(CuerpoEnUtf8(app)({"type": "http", "method": "POST"}, receive, None))
+
+    assert recibido[0]["body"] == '{"m": "mándeme"}'.encode()
 
 
 def test_contrato_cuerpo_que_no_es_objeto_es_422(datos):
