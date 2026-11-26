@@ -19,6 +19,7 @@ import os
 import statistics
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import mlflow
 from dotenv import load_dotenv
@@ -32,6 +33,7 @@ from novadistribuidora.datos import Datos, cargar_datos
 from novadistribuidora.interprete import (
     INSTRUCCIONES,
     VERSION_INSTRUCCIONES,
+    Esfuerzo,
     InterpreteLangChain,
     crear_cadena,
     crear_modelo,
@@ -40,7 +42,21 @@ from novadistribuidora.interprete import (
 from novadistribuidora.servicio import InterpreteNoDisponible, Servicio
 
 RAIZ = Path(__file__).resolve().parents[1]
-ALTERNATIVAS = {"haiku": "anthropic/claude-haiku-5.5", "luna": "openai/gpt-6-luna"}
+
+
+class Alternativa(NamedTuple):
+    modelo: str
+    esfuerzo: Esfuerzo | None = None
+
+
+HAIKU, LUNA = "anthropic/claude-haiku-5.5", "openai/gpt-6-luna"
+# Sin esfuerzo, el del proveedor; los nombres de v1 a v3 se conservan para comparar (D-017).
+ALTERNATIVAS = {
+    "haiku": Alternativa(HAIKU),
+    "luna": Alternativa(LUNA),
+    "luna-low": Alternativa(LUNA, "low"),
+    "luna-minimal": Alternativa(LUNA, "minimal"),
+}
 CONJUNTOS = {
     "publicados": RAIZ / "ejemplos" / "mensajes_dev.jsonl",
     "propios": RAIZ / "evaluacion" / "casos_propios.jsonl",
@@ -91,11 +107,14 @@ def crear_calificadores(datos: Datos) -> list:
     ]
 
 
-def crear_servicio(modelo: str, configuracion: Configuracion, datos: Datos) -> Servicio:
+def crear_servicio(
+    alternativa: Alternativa, configuracion: Configuracion, datos: Datos
+) -> Servicio:
     """El modelo solo, sin alterno de otro proveedor: se mide cada alternativa por sí misma."""
-    estructurado = crear_modelo(modelo, configuracion)
+    estructurado = crear_modelo(alternativa.modelo, configuracion, alternativa.esfuerzo)
     catalogo = describir_catalogo(datos.productos, datos.sinonimos)
-    interprete = InterpreteLangChain(crear_cadena(estructurado, estructurado, catalogo), [modelo])
+    cadena = crear_cadena(estructurado, estructurado, catalogo)
+    interprete = InterpreteLangChain(cadena, [alternativa.modelo])
     return Servicio(datos, interprete)
 
 
@@ -127,7 +146,12 @@ def correr(
     huella = hashlib.sha256(INSTRUCCIONES.encode("utf-8")).hexdigest()[:12]
     with mlflow.start_run(run_name=f"{nombre} {VERSION_INSTRUCCIONES} corrida {corrida}"):
         mlflow.log_params(
-            {"modelo": ALTERNATIVAS[nombre], "corrida": corrida, "prompt_sha256": huella}
+            {
+                "modelo": ALTERNATIVAS[nombre].modelo,
+                "esfuerzo": ALTERNATIVAS[nombre].esfuerzo or "proveedor",
+                "corrida": corrida,
+                "prompt_sha256": huella,
+            }
         )
         mlflow.set_tags(
             {"alternativa": nombre, "instrucciones": VERSION_INSTRUCCIONES, "casos": len(filas)}
