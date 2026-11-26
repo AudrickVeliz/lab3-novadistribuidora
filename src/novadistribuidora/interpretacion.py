@@ -25,10 +25,12 @@ class Mencion(BaseModel):
             "varios si es ambiguo, ninguno si la distribuidora no lo vende."
         ),
     )
-    cantidad: int | None = Field(
+    # Una fracción ("fardo y medio") llega tal cual: si fuera entera, el modelo la redondearía
+    # y el código no sabría que la conversión no es exacta (D-015).
+    cantidad: float | None = Field(
         default=None,
         gt=0,
-        description="Cantidad que dice el cliente; null si no la dice.",
+        description="Cantidad que dice el cliente, con su fracción (1.5, 0.5); null si no la dice.",
     )
     unidad: Unidad = Field(
         default="venta",

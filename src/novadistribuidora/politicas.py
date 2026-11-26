@@ -10,7 +10,7 @@ from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from novadistribuidora.datos import Cliente, Escala, Producto, RegistroHistorial
-from novadistribuidora.interpretacion import Mencion
+from novadistribuidora.interpretacion import Mencion, Unidad
 from novadistribuidora.pedido import Estado, Linea, Motivo, Pendiente, Sustitucion
 
 Cantidades = dict[str, int]
@@ -52,16 +52,24 @@ def resolver_producto_a_quitar(mencion: Mencion, cantidades: Cantidades) -> str 
 
 
 def cantidad_en_unidades_de_venta(mencion: Mencion, producto: Producto) -> int | Pendiente:
-    """§2: sin cantidad es 1 unidad de venta; sueltas y docenas solo si la conversión es exacta."""
+    """§2: sin cantidad es 1 unidad de venta; lo demás, solo si da unidades de venta enteras.
+
+    Todo se lleva a sueltas, así que "fardo y medio" o "media caja" tampoco se redondean (D-015).
+    """
     if mencion.cantidad is None:
         return 1
-    if mencion.unidad == "venta":
-        return mencion.cantidad
-    por_unidad = UNIDADES_POR_DOCENA if mencion.unidad == "docena" else 1
-    sueltas = mencion.cantidad * por_unidad
-    if sueltas % producto.unidades_por_empaque:
+    # str() evita el error binario del float: 1.5 llega como Decimal("1.5").
+    sueltas = Decimal(str(mencion.cantidad)) * _sueltas_por_unidad(mencion.unidad, producto)
+    unidades, resto = divmod(sueltas, producto.unidades_por_empaque)
+    if resto:
         return Pendiente(Motivo.CANTIDAD_NO_CONVERTIBLE, mencion.texto, (producto.sku,))
-    return sueltas // producto.unidades_por_empaque
+    return int(unidades)
+
+
+def _sueltas_por_unidad(unidad: Unidad, producto: Producto) -> int:
+    if unidad == "venta":
+        return producto.unidades_por_empaque
+    return UNIDADES_POR_DOCENA if unidad == "docena" else 1
 
 
 def acumular_cantidad(cantidades: Cantidades, sku: str, cantidad: int, corrige: bool) -> Cantidades:
