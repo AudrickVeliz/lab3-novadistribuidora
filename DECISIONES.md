@@ -194,7 +194,8 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | `fecha_hora` | `AAAA-MM-DDTHH:MM` estricto; se toleran los segundos; zona horaria, espacio o fecha imposible son 422 | Los segundos no cambian la entrega; el resto no es la hora de Guatemala del Anexo |
 | Campos no definidos | Se ignoran (decisión de Audrick) | El Anexo no los declara inválidos; un campo de más no debe costarle el pedido al cliente |
 | Tamaño | Máximo 20 mensajes y 2,000 caracteres por mensaje; lo que exceda es 422 (decisión de Audrick) | Los 84 ejemplos llegan a 3 mensajes y 184 caracteres; el límite acota la latencia y el costo del modelo |
-| Modelo no disponible | Reintento y modelo alterno (paso 3); si ambos fallan, 503 con el motivo (decisión de Audrick) | No hay motivo del contrato para "no se pudo interpretar", y un pedido vacío en revisión violaría el Anexo |
+| Modelo no disponible | Modelo alterno (paso 3; sin reintento desde D-014); si ambos fallan, 503 con el motivo (decisión de Audrick) | No hay motivo del contrato para "no se pudo interpretar", y un pedido vacío en revisión violaría el Anexo |
+| Texto de los errores 404 y 503 | Textos fijos de `api.py` ("No existe el cliente C999"; "El modelo no pudo interpretar el mensaje; intente de nuevo en unos segundos"). Los modelos y la causa de un 503 van al log del servicio y a la traza | CodeQL (`py/stack-trace-exposure`) marcó `str(error)` en la respuesta: no había traza de pila, pero el 503 le mostraba al cliente los modelos, el proveedor y el tipo de excepción |
 | `/health` | Siempre 200; `degradado` con `motivo` si falla un chequeo inyectado (MLflow en el paso 4) | El Anexo pide que el servicio responda y lo refleje; el Lab 2 usaba 503, aquí no |
 | Montos | `Decimal` en el cálculo, número JSON en la respuesta | El Anexo los muestra como números (`120.00`); Pydantic serializaría `Decimal` como texto |
 
@@ -550,3 +551,49 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Mantener 2 intentos del principal | Un corte de Luna suma otros 10 s antes del alterno: el peor caso medido fue de 25.4 s |
 | Un plazo total por pedido | Código nuevo para un caso de 1 en 839 llamadas |
 | Caché de 1 hora | Escribirla cuesta más, y entre pedidos seguidos bastan 5 minutos |
+
+## D-015: las fracciones de la unidad de venta no se redondean
+
+**Fecha:** 2026-11-25
+
+**Contexto:** una batería exploratoria contra la API levantada, con 26 mensajes que no están en el catálogo de problemas, encontró dos pedidos confirmados con otra cantidad: "fardo y medio de agua pura 600" salió como 1 fardo y "media caja de jugo de naranja" como 1 caja. `Mencion.cantidad` era un entero, así que el modelo no tenía cómo escribir 1.5 y redondeaba; el código recibía un número válido y no podía saber que la conversión no era exacta. `politicas.md` §2 pide `cantidad_no_convertible` y no redondear.
+
+**Decisión:**
+
+- `Mencion.cantidad` admite fracciones (`float`, mayor que 0). El modelo solo transcribe lo que dice el cliente: "caja y media" es 1.5 con unidad de venta.
+- `cantidad_en_unidades_de_venta` lleva toda cantidad a sueltas (`Decimal(str(cantidad))` × unidades por empaque, 12 o 1) y acepta solo un número entero de unidades de venta. Si no lo es, registra `cantidad_no_convertible`. La misma función cubre sueltas, docenas y fracciones: la regla vive en un solo lugar.
+- Instrucciones v4: la regla 2 pide escribir la fracción tal cual. Sus ejemplos ("caja y media", "medio fardo") no están en ningún conjunto.
+- 5 casos propios nuevos de desarrollo (P041–P045): fracciones de fardo, caja, quintal y docena, solas o junto a otro producto. Salieron de la exploración, así que no son de prueba.
+- `Decimal(str(...))` y no `Decimal(float)`: 1.5 llega como `Decimal("1.5")` y no arrastra el error binario.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Un booleano `es_fraccion` y cantidad entera | Pierde lo que sí es convertible: media docena de un producto de 6 por empaque es 1 fardo |
+| Pedir al modelo que convierta "media caja" a sueltas | El modelo haría la aritmética (D-001) y una multiplicación equivocada daría una cantidad válida |
+| Redondear en el código | `politicas.md` §2: no se redondea |
+
+## D-016: un plazo de reloj por cada llamada al modelo
+
+**Fecha:** 2026-11-25
+
+**Contexto:** D-014 aceptó como límite que una llamada a GPT-6 Luna tardara 30 s (P015) con `TIEMPO_LIMITE_MODELO_S` en 10. El timeout del cliente (httpx) es por lectura, no total: OpenRouter mantiene viva la conexión mientras el modelo procesa, y cada dato que llega reinicia la cuenta. El equipo docente mide la latencia de cada respuesta, así que el peor caso cuenta. Audrick decidió revisar esa parte de D-014.
+
+**Decisión:**
+
+- `con_plazo` envuelve cada modelo (principal y alterno): la llamada corre en su propio hilo y la cadena espera a lo sumo `TIEMPO_LIMITE_MODELO_S` segundos de reloj. Si se agota, lanza `PlazoAgotado` y `with_fallbacks` pasa al alterno.
+- **Peor caso acotado:** 2 × 10 s y después 503 (D-008), en lugar de no tener límite.
+- **El valor sigue en 10 s:** la p95 de Luna en v3 fue de 5.3 s; con un plazo más corto, más pedidos normales pasarían al alterno.
+- **La llamada cortada no se cancela:** termina en su hilo y su resultado se descarta (httpx no permite interrumpirla desde otro hilo). Cuesta una llamada más, solo en el ~1 % de los casos que pasan de 10 s.
+- `wait()` y no `result(timeout=)`: en Python 3.12, `concurrent.futures.TimeoutError` es el `TimeoutError` estándar, y un error de tiempo del propio modelo se habría reportado como plazo agotado. Una prueba lo detectó.
+- El contexto del hilo se copia (`contextvars`), así que la llamada al modelo sigue dentro de la traza del pedido en MLflow (`test_trazas_la_llamada_al_modelo_queda_dentro_de_la_traza`).
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Cobertura: lanzar el alterno en paralelo a los ~6 s y usar el primero que responda | Más código; a veces se paga doble y, con la cuenta de desarrollo, más 429 |
+| Un plazo global por solicitud | No deja tiempo al alterno: un principal colgado se come el plazo completo |
+| `httpx.Timeout` más corto | Sigue siendo por lectura: no acota el total |
+| Dejarlo como en D-014 | El peor caso medido fue de 30 s, sin límite |

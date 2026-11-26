@@ -1,9 +1,11 @@
 """Contrato del Anexo: POST /v1/pedidos/interpretar y GET /health, con un intérprete falso."""
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 
-from novadistribuidora.api import crear_app
+from novadistribuidora.api import MOTIVO_503, crear_app
 from novadistribuidora.interpretacion import Interpretacion, Mencion
 from novadistribuidora.servicio import InterpreteNoDisponible, Servicio
 
@@ -137,7 +139,7 @@ def test_contrato_cliente_inexistente_es_404_sin_llamar_al_modelo(datos):
     respuesta = _cliente_http(datos, interprete).post(RUTA, json=_solicitud(cliente_id="C999"))
 
     assert respuesta.status_code == 404
-    assert "C999" in respuesta.json()["detail"]
+    assert respuesta.json() == {"detail": "No existe el cliente C999"}
     assert interprete.llamadas == []
 
 
@@ -216,7 +218,19 @@ def test_contrato_modelo_no_disponible_es_503_sin_inventar_un_pedido(datos):
     respuesta = _cliente_http(datos, interprete).post(RUTA, json=_solicitud())
 
     assert respuesta.status_code == 503
-    assert respuesta.json() == {"detail": "OpenRouter no respondió"}
+    assert respuesta.json() == {"detail": MOTIVO_503}
+
+
+def test_el_503_no_muestra_la_causa_al_cliente_y_la_deja_en_el_log(datos, caplog):
+    causa = "Los modelos openai/gpt-6-luna, anthropic/claude-haiku-5.5 fallaron (APITimeoutError)"
+    interprete = InterpreteFalso(error=InterpreteNoDisponible(causa))
+
+    with caplog.at_level(logging.WARNING, logger="novadistribuidora.api"):
+        respuesta = _cliente_http(datos, interprete).post(RUTA, json=_solicitud())
+
+    assert "gpt-6-luna" not in respuesta.text
+    assert "APITimeoutError" not in respuesta.text
+    assert causa in caplog.text
 
 
 # GET /health

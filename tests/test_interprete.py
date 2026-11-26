@@ -1,5 +1,7 @@
 """La cadena de LangChain con modelos falsos: prompt, alterno y errores, sin red."""
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,8 @@ from novadistribuidora.interprete import (
     CACHE,
     ETIQUETA,
     InterpreteLangChain,
+    PlazoAgotado,
+    con_plazo,
     crear_cadena,
     crear_interprete,
     describir_catalogo,
@@ -19,6 +23,8 @@ from novadistribuidora.interprete import (
 from novadistribuidora.servicio import InterpreteNoDisponible
 
 PEDIDO = Interpretacion(es_pedido=True, menciones=[Mencion(texto="kola", skus=["B01"], cantidad=2)])
+PLAZO_S = 5
+PLAZO_CORTO_S = 0.05
 
 
 class ModeloFalso:
@@ -35,12 +41,28 @@ class ModeloFalso:
             raise TimeoutError("el proveedor no respondió")
         return self.respuesta
 
-    def como_runnable(self):
-        return RunnableLambda(self)
+    def como_runnable(self, plazo_s=PLAZO_S):
+        return con_plazo(RunnableLambda(self), plazo_s)
+
+
+class ModeloColgado(ModeloFalso):
+    """Como un proveedor que mantiene viva la conexión: no responde hasta que se lo suelta."""
+
+    def __init__(self):
+        super().__init__()
+        self.soltar = threading.Event()
+
+    def __call__(self, prompt):
+        self.soltar.wait(PLAZO_S)
+        return super().__call__(prompt)
 
 
 def _interprete(principal, alterno, catalogo="B01 | Kola Norte 600 ml | fardo | 24 | kola 600"):
-    cadena = crear_cadena(principal.como_runnable(), alterno.como_runnable(), catalogo)
+    cadena = crear_cadena(
+        principal.como_runnable(PLAZO_CORTO_S if isinstance(principal, ModeloColgado) else PLAZO_S),
+        alterno.como_runnable(PLAZO_CORTO_S if isinstance(alterno, ModeloColgado) else PLAZO_S),
+        catalogo,
+    )
     return InterpreteLangChain(cadena, ["principal", "alterno"])
 
 
@@ -119,6 +141,34 @@ def test_si_ambos_fallan_no_esta_disponible():
 
     with pytest.raises(InterpreteNoDisponible, match=r"principal, alterno \(TimeoutError\)"):
         interprete.interpretar(["2 kola"])
+
+
+def test_si_el_principal_agota_su_plazo_responde_el_alterno_sin_esperarlo():
+    colgado, alterno = ModeloColgado(), ModeloFalso(respuesta=Interpretacion(es_pedido=False))
+    inicio = time.perf_counter()
+
+    interpretacion = _interprete(colgado, alterno).interpretar(["2 kola"])
+
+    assert interpretacion == alterno.respuesta
+    assert time.perf_counter() - inicio < PLAZO_S
+    colgado.soltar.set()
+
+
+def test_si_ambos_agotan_su_plazo_no_esta_disponible():
+    principal, alterno = ModeloColgado(), ModeloColgado()
+
+    with pytest.raises(InterpreteNoDisponible, match=r"\(PlazoAgotado\)"):
+        _interprete(principal, alterno).interpretar(["2 kola"])
+    principal.soltar.set()
+    alterno.soltar.set()
+
+
+def test_el_plazo_agotado_dice_cuantos_segundos_espero():
+    colgado = ModeloColgado()
+
+    with pytest.raises(PlazoAgotado, match=r"no respondió en 0\.05 s"):
+        colgado.como_runnable(PLAZO_CORTO_S).invoke("2 kola")
+    colgado.soltar.set()
 
 
 def test_una_respuesta_sin_interpretacion_no_esta_disponible():

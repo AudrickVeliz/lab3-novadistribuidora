@@ -48,7 +48,7 @@ class Servicio:
     def interpretar_pedido(self, solicitud: SolicitudInterpretar) -> RespuestaInterpretar:
         cliente = self.datos.clientes.get(solicitud.cliente_id)
         if cliente is None:
-            raise ClienteNoExiste(f"No existe el cliente {solicitud.cliente_id}")
+            raise ClienteNoExiste(f"{solicitud.cliente_id} no está en clientes.parquet")
         interpretacion = self.interprete.interpretar(solicitud.mensajes)
         pedido = armar_pedido(interpretacion, cliente, solicitud.fecha_hora, self.datos)
         mensaje = redactar_confirmacion(pedido, self.datos.productos, solicitud.fecha_hora)

@@ -94,6 +94,30 @@ def test_politica_cantidades_conversion_no_exacta_no_se_redondea(productos):
     )
 
 
+def test_politica_cantidades_fraccion_de_unidad_de_venta_no_se_redondea(productos):
+    mencion = _mencion("fardo y medio de kola 600", cantidad=1.5)
+
+    resultado = cantidad_en_unidades_de_venta(mencion, productos["B01"])
+
+    assert resultado == Pendiente(
+        Motivo.CANTIDAD_NO_CONVERTIBLE, "fardo y medio de kola 600", ("B01",)
+    )
+
+
+def test_politica_cantidades_media_docena_de_un_empaque_de_seis_es_una_unidad(productos):
+    mencion = _mencion("media docena de kola 3 L", ["B03"], cantidad=0.5, unidad="docena")
+
+    assert cantidad_en_unidades_de_venta(mencion, productos["B03"]) == 1
+
+
+def test_politica_cantidades_sueltas_fraccionarias_no_se_convierten(productos):
+    mencion = _mencion("24.5 botellas de kola 600", cantidad=24.5, unidad="suelta")
+
+    resultado = cantidad_en_unidades_de_venta(mencion, productos["B01"])
+
+    assert isinstance(resultado, Pendiente)
+
+
 def test_politica_cantidades_un_quintal_tiene_una_unidad(productos):
     mencion = _mencion("5 arroz quintal", ["A02"], cantidad=5, unidad="suelta")
 
