@@ -14,7 +14,7 @@ MODELO_ALTERNO_POR_OMISION = "anthropic/claude-haiku-5.5"
 # Esfuerzo de razonamiento del principal; "proveedor" no lo envía y deja el del modelo (D-017).
 Esfuerzo = Literal["low", "minimal"]
 SIN_ESFUERZO = "proveedor"
-# Con minimal, Luna responde en la mitad del tiempo con la misma calidad en la evaluación (D-017).
+# Con minimal, Luna responde en la mitad del tiempo; su calidad medida está en D-017.
 ESFUERZO_POR_OMISION: Esfuerzo = "minimal"
 CARPETA_DATOS_POR_OMISION = "datos"
 # En local; docker compose lo cambia por el nombre del servicio de MLflow.

@@ -593,3 +593,53 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Un plazo global por solicitud | No deja tiempo al alterno: un principal colgado se come el plazo completo |
 | `httpx.Timeout` más corto | Sigue siendo por lectura: no acota el total |
 | Dejarlo como en D-014 | El peor caso medido fue de 30 s, sin límite |
+
+## D-017: GPT-6 Luna con esfuerzo de razonamiento minimal
+
+**Fecha:** 2026-11-25
+
+**Contexto:** las instrucciones v4 (D-015) y el plazo por llamada (D-016) cambiaron el producto después de D-014, así que la elección del modelo se volvió a medir. GPT-6 Luna razona antes de responder, y OpenRouter permite pedirle menos esfuerzo (`reasoning.effort`). Un sondeo de 4 mensajes × 2 rondas dio medianas de 3.05 s con el esfuerzo del proveedor, 3.03 s con `low` y 2.29 s con `minimal`, todas con interpretaciones correctas. Faltaba saber si la calidad se sostiene en los 144 casos.
+
+**Evaluación:** 4 alternativas con v4, 3 corridas de 144 casos cada una (84 publicados, 45 propios y 15 de prueba), es decir, 1,728 casos (`evidencia/comparacion.md`):
+
+| Alternativa | Prueba (15) | Propios (45) | Publicados (84) | Confirmados con error | Latencia p50 / p95, publicados | Costo por pedido, publicados |
+|---|---|---|---|---|---|---|
+| Haiku | 95.6 % | 97.0 % | 99.6 % | 0 | 1.98 s / 3.90 s | US$0.00017 |
+| Luna, esfuerzo del proveedor (D-014) | 100 % | 99.3 % | 99.6 % | 1 | 3.03 s / 4.28 s | US$0.00011 |
+| Luna `low` | 100 % | 99.3 % | 98.4 % | 1 | 2.03 s / 4.50 s | US$0.00008 |
+| **Luna `minimal`** | **100 %** | **99.3 %** | 98.4 % | 1 | **1.56 s / 3.42 s** | **US$0.00008** |
+
+- **Confirmados con error:** como en D-014, fallos que salen con estado `confirmado` en las 3 corridas. `tools/evaluar.py` ahora los cuenta (columna "Confirmados con error" y, por caso, "Salió confirmado"); con los runs de v1 a v3 da los mismos números de D-014.
+- **Los tres de Luna,** cada uno en 1 de 3 corridas:
+  - esfuerzo del proveedor: "48 sobres de shampoo brisa" como 48 unidades de venta en lugar de 2 (P023);
+  - `low`: dejó fuera "recargas de q50", que no se vende, en lugar de registrarlo como pendiente (D045);
+  - `minimal`: en un audio transcrito no aplicó "corrijo, que sean 2 quintales" y dejó 6 (P035).
+- **Haiku v4** no confirmó ningún pedido equivocado; en v3 fueron 4. Sus fallos (P043 en 3 de 3, T002 en 2 de 3, P022 y D048) salen con estado `requiere_revision`.
+- **Fallos de Luna `minimal`:** D008 en 3 de 3 y D014 en 1 de 3 ("pasta" ambiguo con una opción de menos), que van a revisión, y P035.
+- **Seguridad:** condiciones intactas en el 100 % de los casos; ningún error.
+
+**Decisión** (de Audrick):
+
+- **GPT-6 Luna con esfuerzo `minimal` como principal y Claude Haiku 5.5 como alterno.**
+- `ESFUERZO_MODELO` en `.env` (por omisión `minimal`; también `low` o `proveedor`, que no envía el parámetro). Se aplica solo al principal: el alterno, de otro proveedor, responde con el suyo.
+- **Por qué `minimal`:** la mitad de la latencia (p50 de 3.03 s a 1.56 s y p95 de 4.28 s a 3.42 s) y un 25 % menos de costo, con el 100 % de los casos de prueba en las 3 corridas.
+- **El costo en calidad es pequeño y va a revisión:** baja de 99.6 % a 98.4 % en los publicados por D008, que sale como `requiere_revision`. Los confirmados con error son 1 contra 1 del esfuerzo del proveedor.
+- **0 de Haiku contra 1 de Luna no decide:** es 1 caso en 432, y en v1 a v3 Haiku confirmó 7, 1 y 4 pedidos equivocados contra 3, 0 y 0 de Luna.
+- **El plazo de 10 s (D-016) no cambia:** con una p95 de 3.4 s, el margen crece.
+
+**Límite de la cuenta de OpenRouter:** una cuenta nueva tiene un límite de 20 solicitudes por minuto para GPT-6 Luna, sin importar el esfuerzo.
+
+- Las primeras corridas de Luna y Luna `low` con 2 hilos y sin pausa dieron 429. Esos 4 runs se borraron de MLflow (borrado lógico) y se repitieron con `--hilos 1 --pausa 3`, sin ningún error.
+- En el producto, un 429 no se reintenta (D-014): el pedido lo responde Haiku de inmediato. Con v4, Haiku no confirmó ningún pedido equivocado, así que en una cuenta con poco cupo la calidad se sostiene. Haiku también es el alterno más rápido.
+
+**Uso de los casos de prueba:** es el cuarto uso de los 15 de prueba (v1 a v4), y el esfuerzo también se eligió con ellos, así que su 100 % es optimista. La prueba final es la del equipo docente.
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| Luna con el esfuerzo del proveedor, como en D-014 | El doble de latencia y un 33 % más de costo, para 1.2 puntos en los publicados que van a revisión |
+| Luna `low` | La misma calidad que `minimal`, con más latencia y una p95 más alta (4.50 s) |
+| Haiku como principal | Falla un caso de prueba (T002, 2 de 3) y cuesta el doble; su historial de confirmados con error es peor |
+| Pedir esfuerzo también al alterno | Haiku ya es el más rápido, y el parámetro se traduce distinto en cada proveedor |
+| Más corridas para separar 0 de 1 confirmados con error | Cada corrida de Luna toma ~15 min con el límite de 20 por minuto, y la diferencia no cambiaría la decisión |
