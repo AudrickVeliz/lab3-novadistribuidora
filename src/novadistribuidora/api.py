@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from novadistribuidora import __version__
 from novadistribuidora.contrato import (
@@ -36,6 +37,11 @@ MOTIVOS_422 = {
 MOTIVO_404 = "No existe el cliente {cliente_id}"
 MOTIVO_503 = "El modelo no pudo interpretar el mensaje; intente de nuevo en unos segundos"
 
+# JSON va en UTF-8 (RFC 8259), pero una terminal de Windows manda los acentos en Windows-1252:
+# se aceptan para que un pedido no falle por la codificación de quien lo envía (D-018).
+CODIFICACIONES = ("utf-8", "cp1252")
+MOTIVO_CODIFICACION = "cuerpo: no está en UTF-8 ni en Windows-1252"
+
 registro = logging.getLogger(__name__)
 
 
@@ -45,6 +51,7 @@ def crear_app(servicio: Servicio) -> FastAPI:
         version=__version__,
         description="Convierte los mensajes de un cliente en un pedido estructurado y verificable.",
     )
+    app.add_middleware(CuerpoEnUtf8)
 
     @app.exception_handler(RequestValidationError)
     async def _solicitud_invalida(_: Request, error: RequestValidationError) -> JSONResponse:
@@ -98,3 +105,58 @@ def _motivo(error: dict[str, Any]) -> str:
     if error["type"] == "value_error":
         return str(error["ctx"]["error"])
     return MOTIVOS_422.get(error["type"], error["msg"])
+
+
+class CuerpoEnUtf8:
+    """Middleware ASGI: FastAPI recibe el cuerpo en UTF-8, o la solicitud es 422 con el motivo.
+
+    Sin él, un cuerpo en otra codificación sería un 400 con un texto en inglés de FastAPI.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] != "POST":
+            await self.app(scope, receive, send)
+            return
+        cuerpo = cuerpo_en_utf8(await _leer_cuerpo(receive))
+        if cuerpo is None:
+            respuesta = JSONResponse({"detail": MOTIVO_CODIFICACION}, status_code=422)
+            await respuesta(scope, receive, send)
+            return
+        await self.app(scope, entregar_cuerpo(cuerpo, receive), send)
+
+
+def cuerpo_en_utf8(cuerpo: bytes) -> bytes | None:
+    """El cuerpo recodificado en UTF-8, o None si no está en ninguna de las CODIFICACIONES."""
+    for codificacion in CODIFICACIONES:
+        try:
+            texto = cuerpo.decode(codificacion)
+        except UnicodeDecodeError:
+            continue  # Se prueba la siguiente; si ninguna sirve, el llamador responde 422.
+        return texto.encode("utf-8")
+    return None
+
+
+async def _leer_cuerpo(receive: Receive) -> bytes:
+    partes = []
+    while True:
+        mensaje = await receive()
+        partes.append(mensaje.get("body", b""))
+        if not mensaje.get("more_body", False):
+            return b"".join(partes)
+
+
+def entregar_cuerpo(cuerpo: bytes, receive: Receive) -> Receive:
+    """Un receive que entrega el cuerpo ya leído y después pasa los mensajes del servidor."""
+    entregado = False
+
+    async def recibir() -> Message:
+        nonlocal entregado
+        if entregado:
+            return await receive()
+        entregado = True
+        return {"type": "http.request", "body": cuerpo, "more_body": False}
+
+    return recibir
