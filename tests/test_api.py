@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from novadistribuidora.api import (
     MOTIVO_503,
     MOTIVO_CODIFICACION,
+    CuerpoEnUtf8,
     crear_app,
     cuerpo_en_utf8,
     entregar_cuerpo,
@@ -247,6 +248,25 @@ def test_contrato_el_cuerpo_se_entrega_una_vez_y_luego_los_mensajes_del_servidor
 
     assert primero == {"type": "http.request", "body": b"{}", "more_body": False}
     assert segundo == desconexion
+
+
+def test_contrato_un_cuerpo_en_varios_trozos_se_une_antes_de_recodificar():
+    # La "á" en Windows-1252 llega en el segundo trozo.
+    trozos = [
+        {"type": "http.request", "body": b'{"m": "m', "more_body": True},
+        {"type": "http.request", "body": b'\xe1ndeme"}', "more_body": False},
+    ]
+    recibido = []
+
+    async def receive():
+        return trozos.pop(0)
+
+    async def app(scope, receive, send):
+        recibido.append(await receive())
+
+    asyncio.run(CuerpoEnUtf8(app)({"type": "http", "method": "POST"}, receive, None))
+
+    assert recibido[0]["body"] == '{"m": "mándeme"}'.encode()
 
 
 def test_contrato_cuerpo_que_no_es_objeto_es_422(datos):
