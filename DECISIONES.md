@@ -643,3 +643,25 @@ Lo que depende de piezas que todavía no existen se agrega con ellas: construir 
 | Haiku como principal | Falla un caso de prueba (T002, 2 de 3) y cuesta el doble; su historial de confirmados con error es peor |
 | Pedir esfuerzo también al alterno | Haiku ya es el más rápido, y el parámetro se traduce distinto en cada proveedor |
 | Más corridas para separar 0 de 1 confirmados con error | Cada corrida de Luna toma ~15 min con el límite de 20 por minuto, y la diferencia no cambiaría la decisión |
+
+## D-018: un cuerpo en Windows-1252 se atiende
+
+**Fecha:** 2026-11-25
+
+**Contexto:** el ejemplo `curl` del README, enviado desde Git Bash en Windows, recibió un 400 con el texto en inglés de FastAPI ("There was an error parsing the body"). La terminal manda los acentos de "mándeme" en Windows-1252 (la "á" como el byte 0xE1), que no es UTF-8 válido, y FastAPI responde 400 antes de validar la solicitud. El Anexo pide 422 con el motivo para una solicitud inválida, y el equipo docente puede enviar pedidos desde una terminal así.
+
+**Decisión** (de Audrick):
+
+- El middleware ASGI `CuerpoEnUtf8` lee el cuerpo de cada POST y se lo entrega a FastAPI en UTF-8. Si no es UTF-8 válido, lo lee como Windows-1252 y lo recodifica.
+- **El UTF-8 válido siempre gana:** un cuerpo correcto llega intacto (`test_contrato_cuerpo_en_utf8_no_cambia`).
+- Si tampoco es Windows-1252 (bytes que esa codificación no define, como 0x81), responde 422 con `cuerpo: no está en UTF-8 ni en Windows-1252`, igual que las demás solicitudes inválidas (D-008).
+- El middleware de trazas queda por fuera, así que esa 422 también deja su traza (D-010).
+
+**Alternativas:**
+
+| Alternativa | En contra |
+|---|---|
+| 422 en español para todo lo que no sea UTF-8 | Cumple el estándar, pero el pedido de una terminal de Windows no se atiende |
+| Cambiar solo el ejemplo del README (`--data-binary @archivo.json`) | Un cliente en Windows-1252 seguiría recibiendo 400 en inglés |
+| Leer el `charset` del encabezado `Content-Type` | curl no lo envía, y la terminal no avisa en qué codificación escribe |
+| Seguir aceptando UTF-16 y UTF-32, que FastAPI detectaba antes | Ningún cliente del caso los usa y RFC 8259 pide UTF-8. Ese cuerpo ahora se lee como Windows-1252 y es 422 (`cuerpo: no es JSON válido`) |
